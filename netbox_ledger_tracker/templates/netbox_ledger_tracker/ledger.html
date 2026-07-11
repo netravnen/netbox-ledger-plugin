@@ -1,0 +1,12 @@
+{% extends 'generic/object.html' %}
+{% block extra_controls %}
+  {% if can_add_expense and not object.closed %}
+    <a href="{% url 'plugins:netbox_ledger_tracker:expense_split_add' %}?ledger={{ object.pk }}&return_url={{ object.get_absolute_url }}"
+       class="btn btn-primary btn-sm">
+      <i class="mdi mdi-plus-thick"></i> Add Expense
+    </a>
+  {% endif %}
+  <a href="{% url 'plugins:netbox_ledger_tracker:ledger_settle_up' pk=object.pk %}" class="btn btn-outline-primary btn-sm">
+    <i class="mdi mdi-calculator-variant"></i> Settle Up
+  </a>
+{% endblock %}

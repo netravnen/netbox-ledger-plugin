@@ -1,0 +1,64 @@
+name: release-tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (example: 0.2.0). Leave blank to use the latest CHANGELOG heading"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version input
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            resolved="$(python scripts/release_changelog_tag.py print-version)"
+            echo "version=${resolved}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate release metadata
+        run: |
+          python scripts/release_changelog_tag.py validate \
+            --version "${{ steps.version.outputs.version }}" \
+            --require-compatibility-entry
+
+      - name: Build tag annotation from changelog
+        run: |
+          python scripts/release_changelog_tag.py write-tag-message \
+            --version "${{ steps.version.outputs.version }}" \
+            --output .tag_message.txt \
+            --require-compatibility-entry
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push annotated tag
+        run: |
+          python scripts/release_changelog_tag.py create-tag \
+            --version "${{ steps.version.outputs.version }}" \
+            --message-file .tag_message.txt \
+            --push

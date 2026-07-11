@@ -1,0 +1,34 @@
+{% extends 'base/layout.html' %}
+{% load form_helpers %}
+
+{% block title %}{% if expense %}Edit Split: {{ expense }}{% else %}Split Expense{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card">
+      <h5 class="card-header">{% if expense %}Edit Split: {{ expense }}{% else %}Split Expense{% endif %}</h5>
+      <div class="card-body">
+        <p class="text-muted">
+          Select everyone involved, then set what each person paid and whether their share is a fixed amount or
+          split evenly from whatever's left after fixed shares.
+        </p>
+        {% render_errors form %}
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% if return_url %}<input type="hidden" name="return_url" value="{{ return_url }}">{% endif %}
+          <div class="field-group mb-3">
+            {% render_form form %}
+          </div>
+          <div class="btn-list">
+            <a href="{{ return_url }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="mdi mdi-call-split"></i> {% if expense %}Save Split{% else %}Create Expense{% endif %}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

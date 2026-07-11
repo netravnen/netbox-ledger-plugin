@@ -1,0 +1,9 @@
+{% extends 'generic/object.html' %}
+{% block extra_controls %}
+  {% if can_change_expense and not object.ledger.closed %}
+    <a href="{% url 'plugins:netbox_ledger_tracker:expense_split_edit' pk=object.pk %}?return_url={{ object.get_absolute_url }}"
+       class="btn btn-outline-primary btn-sm">
+      <i class="mdi mdi-call-split"></i> Edit Split
+    </a>
+  {% endif %}
+{% endblock %}

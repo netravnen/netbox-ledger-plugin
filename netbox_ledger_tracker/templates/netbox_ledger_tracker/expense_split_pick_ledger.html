@@ -1,0 +1,27 @@
+{% extends 'base/layout.html' %}
+{% load form_helpers %}
+
+{% block title %}Split Expense{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6 offset-md-3">
+    <div class="card">
+      <h5 class="card-header">Split Expense</h5>
+      <div class="card-body">
+        <p class="text-muted">Pick which ledger this expense belongs to.</p>
+        {% render_errors form %}
+        <form method="get">
+          <div class="field-group mb-3">
+            {% render_form form %}
+          </div>
+          <div class="btn-list">
+            {% if return_url %}<a href="{{ return_url }}" class="btn btn-outline-secondary">Cancel</a>{% endif %}
+            <button type="submit" class="btn btn-primary">Continue</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}Settle Up: {{ ledger }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-12">
+    <a href="{{ ledger.get_absolute_url }}" class="btn btn-outline-secondary btn-sm">
+      <i class="mdi mdi-arrow-left"></i> Back to {{ ledger }}
+    </a>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if inconsistent_expense_ids %}
+<div class="alert alert-warning">
+  These expenses don't balance (paid amounts don't match assigned shares) and may make this result inaccurate:
+  {% for pk in inconsistent_expense_ids %}
+    <a href="{% url 'plugins:netbox_ledger_tracker:expense' pk=pk %}">#{{ pk }}</a>{% if not forloop.last %}, {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if matrix %}
+<div class="card">
+  <h5 class="card-header">Who owes whom &mdash; {{ ledger.get_calc_method_display }}</h5>
+  <div class="card-body table-responsive">
+    <table class="table table-bordered table-sm mb-0">
+      {% for row_key, row in matrix.items %}
+      <tr{% if row_key == 0 or row_key == 'total' %} class="table-light"{% endif %}>
+        {% for cell_key, cell in row.items %}
+          {% if row_key == 0 or cell_key == 0 %}
+            <th>{{ cell }}</th>
+          {% else %}
+            <td>{{ cell }}</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% elif not error %}
+<div class="alert alert-info">No expenses recorded for this ledger yet.</div>
+{% endif %}
+{% endblock %}
