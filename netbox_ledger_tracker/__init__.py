@@ -37,7 +37,7 @@ class LedgerTrackerConfig(PluginConfig):
 
         from .choices import LedgerCalcMethodChoices
 
-        allowed_calc_methods = {code for code, _label in LedgerCalcMethodChoices.CHOICES}
+        allowed_calc_methods = {code for code, _label, _color in LedgerCalcMethodChoices.CHOICES}
 
         base_currency = plugin_config.get('base_currency')
         if base_currency is not None:
