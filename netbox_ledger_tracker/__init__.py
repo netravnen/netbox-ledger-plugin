@@ -16,6 +16,12 @@ class LedgerTrackerConfig(PluginConfig):
     author = 'ch'
     author_email = 'netbox-ledger-tracker@btwlf.eu'
     base_url = 'ledger'
+    # Migration 0002 depends on extras.0140_imageattachment_image_size, which
+    # first shipped in NetBox 4.6.4. Without a declared floor the plugin loads
+    # on older releases and only fails later at `migrate` with
+    # NodeNotFoundError.
+    min_version = '4.6.4'
+    max_version = '4.6.99'
     default_settings = {
         # ISO 4217 code new Currency rows are pegged against by default.
         'base_currency': 'DKK',
