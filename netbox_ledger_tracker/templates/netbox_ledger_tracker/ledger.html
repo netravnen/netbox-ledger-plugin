@@ -16,3 +16,16 @@
     <i class="mdi mdi-calculator-variant"></i> Settle Up
   </a>
 {% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  {% if balances %}
+    <div class="row mt-3">
+      <div class="col-12">
+        {% with ledger=object %}
+          {% include 'netbox_ledger_tracker/inc/balances.html' %}
+        {% endwith %}
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

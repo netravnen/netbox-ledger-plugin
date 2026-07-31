@@ -252,3 +252,63 @@ class LedgerSettleUpViewTest(TestCase):
     def test_no_banner_when_nothing_has_been_settled(self):
         self._dinner_split_evenly()
         self.assertNotIn(b'already been deducted', self._get().content)
+
+    def _balance_for(self, response, person):
+        return next(row for row in response.context['balances'] if row['person'] == person)
+
+    def test_balances_show_who_is_owed_and_who_owes(self):
+        self._dinner_split_evenly()
+
+        response = self._get()
+
+        alice = self._balance_for(response, self.alice)
+        bob = self._balance_for(response, self.bob)
+        self.assertEqual(alice['paid'], Decimal('100.00'))
+        self.assertEqual(alice['share'], Decimal('50.00'))
+        self.assertEqual(alice['net'], Decimal('50.00'))
+        self.assertEqual(bob['paid'], Decimal('0.00'))
+        self.assertEqual(bob['net'], Decimal('-50.00'))
+
+    def test_balances_net_to_zero(self):
+        self._dinner_split_evenly()
+        total = sum(row['net'] for row in self._get().context['balances'])
+        self.assertEqual(total, Decimal('0'))
+
+    def test_balances_account_for_settlements(self):
+        self._dinner_split_evenly()
+        self._settle('50.00')
+
+        response = self._get()
+
+        alice = self._balance_for(response, self.alice)
+        bob = self._balance_for(response, self.bob)
+        self.assertEqual(bob['settled'], Decimal('50.00'))
+        self.assertEqual(alice['settled'], Decimal('-50.00'))
+        self.assertEqual(alice['net'], Decimal('0.00'))
+        self.assertEqual(bob['net'], Decimal('0.00'))
+
+    def test_balances_agree_with_the_matrix(self):
+        """The whole point of sharing calc/balances.py: these cannot disagree."""
+        self._dinner_split_evenly()
+        self._settle('20.00')
+
+        response = self._get()
+
+        outstanding = self._matrix(response)[self.alice.pk][self.bob.pk]
+        self.assertEqual(outstanding, Decimal('30.00'))
+        self.assertEqual(self._balance_for(response, self.bob)['net'], Decimal('-30.00'))
+        self.assertEqual(self._balance_for(response, self.alice)['net'], Decimal('30.00'))
+
+
+class LedgerDetailBalancesTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_user(username='bal-admin', password='pass', is_superuser=True)
+        self.client.force_login(self.superuser)
+        self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
+        self.alice = Person.objects.create(name='Alice', ledger=self.ledger)
+
+    def test_ledger_page_exposes_balances(self):
+        response = self.client.get(_url('ledger', pk=self.ledger.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['person'] for row in response.context['balances']], [self.alice])

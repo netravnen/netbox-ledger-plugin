@@ -38,6 +38,11 @@
 </div>
 {% endif %}
 
+{% if balances %}
+{% include 'netbox_ledger_tracker/inc/balances.html' %}
+<div class="mb-3"></div>
+{% endif %}
+
 {% if matrix %}
 <div class="card">
   <h5 class="card-header">Who owes whom &mdash; {{ ledger.get_calc_method_display }}</h5>

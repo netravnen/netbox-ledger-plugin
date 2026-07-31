@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from decimal import ROUND_DOWN, Decimal
-from fractions import Fraction
 
 import networkx as nx
 from django.contrib import messages
@@ -62,6 +61,7 @@ from .forms import (
     SettlementImportForm,
 )
 from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
+from .summary import build_ledger_calc_inputs, ledger_person_balances
 from .tables import (
     CurrencyTable,
     ExpensePartTable,
@@ -173,6 +173,7 @@ class LedgerView(ObjectView):
         return {
             'can_add_expense': request.user.has_perm('netbox_ledger_tracker.add_expense'),
             'can_add_settlement': request.user.has_perm('netbox_ledger_tracker.add_settlement'),
+            'balances': ledger_person_balances(instance),
         }
 
 
@@ -229,39 +230,10 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
         people = list(Person.objects.filter(ledger=ledger))
         people_by_id = OrderedDict((person.pk, person.name) for person in people)
 
-        expenses = Expense.objects.filter(ledger=ledger).prefetch_related('parts')
-        calc_data = []
-        inconsistent_expense_ids = []
-
-        for expense in expenses:
-            whopaid = []
-            whoshouldpay = {}
-            paid_total = Decimal('0')
-            should_total = Decimal('0')
-
-            for part in expense.parts.all():
-                if part.has_paid_native:
-                    whopaid.append({'personId': part.person_id, 'amount': Fraction(part.has_paid_native)})
-                    paid_total += part.has_paid_native
-                whoshouldpay[part.person_id] = Fraction(part.should_pay_native or 0)
-                should_total += part.should_pay_native or 0
-
-            if paid_total != expense.amount_native or should_total != expense.amount_native:
-                inconsistent_expense_ids.append(expense.pk)
-
-            calc_data.append({'whopaid': whopaid, 'whoshouldpay': whoshouldpay})
-
         # Money already handed over reduces what is still outstanding, so the
-        # matrix shows what remains rather than the original debt.
-        settlement_rows = Settlement.objects.filter(ledger=ledger)
-        settlement_data = [
-            {
-                'from': settlement.from_person_id,
-                'to': settlement.to_person_id,
-                'amount': Fraction(settlement.amount_native),
-            }
-            for settlement in settlement_rows
-        ]
+        # matrix shows what remains rather than the original debt. Built by the
+        # same helper the balance table uses, so the two cannot disagree.
+        calc_data, settlement_data, inconsistent_expense_ids = build_ledger_calc_inputs(ledger)
 
         matrix = None
         error = None
@@ -293,6 +265,7 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
                 'error': error,
                 'inconsistent_expense_ids': inconsistent_expense_ids,
                 'settlement_count': len(settlement_data),
+                'balances': ledger_person_balances(ledger, people),
             },
         )
 

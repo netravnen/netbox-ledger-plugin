@@ -1,0 +1,41 @@
+{% comment %}
+Per-person balances in the ledger currency. `net` comes from the same
+calculator that produces the Settle Up matrix, so the two cannot disagree.
+{% endcomment %}
+<div class="card">
+  <h5 class="card-header">Balances &mdash; {{ ledger.currency }}</h5>
+  <div class="card-body table-responsive">
+    <table class="table table-hover table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Person</th>
+          <th class="text-end">Paid</th>
+          <th class="text-end">Share</th>
+          <th class="text-end">Settled</th>
+          <th class="text-end">Net</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in balances %}
+        <tr>
+          <td><a href="{{ row.person.get_absolute_url }}">{{ row.person }}</a></td>
+          <td class="text-end">{{ row.paid|floatformat:2 }}</td>
+          <td class="text-end">{{ row.share|floatformat:2 }}</td>
+          <td class="text-end">{{ row.settled|floatformat:2 }}</td>
+          <td class="text-end">
+            {% if row.net > 0 %}
+              <span class="text-success">is owed {{ row.net|floatformat:2 }}</span>
+            {% elif row.net < 0 %}
+              <span class="text-danger">owes {{ row.net|floatformat:2|cut:"-" }}</span>
+            {% else %}
+              <span class="text-muted">settled up</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-muted">No people in this ledger yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
