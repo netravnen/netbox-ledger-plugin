@@ -179,6 +179,21 @@ class Person(NetBoxModel):
     def get_absolute_url(self) -> str:
         return reverse('plugins:netbox_ledger_tracker:person', args=[self.pk])
 
+    def clean(self):
+        super().clean()
+        if not self.ledger_id or not self.ledger.closed:
+            return
+
+        # Ledger.closed promises to refuse new people, but only expenses were
+        # ever checked. Correcting a name on a closed ledger stays allowed --
+        # what is refused is growing the group after the fact.
+        if self._state.adding:
+            raise ValidationError({'ledger': 'Cannot add people to a closed ledger.'})
+
+        previous_ledger_id = Person.objects.filter(pk=self.pk).values_list('ledger_id', flat=True).first()
+        if previous_ledger_id is not None and previous_ledger_id != self.ledger_id:
+            raise ValidationError({'ledger': 'Cannot move people into a closed ledger.'})
+
 
 class Expense(FrozenRateMixin, NetBoxModel):
     """A single shared expense recorded against a Ledger."""

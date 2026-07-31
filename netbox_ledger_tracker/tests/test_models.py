@@ -281,3 +281,35 @@ class SettlementModelTest(TestCase):
 
     def test_str_describes_the_transfer(self):
         self.assertEqual(str(self._settlement()), 'Bob to Alice: 50.00 DKK')
+
+
+class ClosedLedgerTest(TestCase):
+    """Ledger.closed promises to refuse new people; only expenses were checked."""
+
+    def setUp(self):
+        self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.open_ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
+        self.closed_ledger = Ledger.objects.create(name='House tab', currency=self.currency, closed=True)
+
+    def test_cannot_add_a_person_to_a_closed_ledger(self):
+        with self.assertRaises(ValidationError):
+            Person(name='Alice', ledger=self.closed_ledger).clean()
+
+    def test_can_still_edit_an_existing_person_on_a_closed_ledger(self):
+        # Added while the ledger was open, then the ledger was closed around them.
+        person = Person.objects.create(name='Alice', ledger=self.open_ledger)
+        self.open_ledger.closed = True
+        self.open_ledger.save()
+
+        person.refresh_from_db()
+        person.name = 'Alice B'
+        person.clean()  # should not raise
+
+    def test_cannot_move_a_person_into_a_closed_ledger(self):
+        person = Person.objects.create(name='Alice', ledger=self.open_ledger)
+        person.ledger = self.closed_ledger
+        with self.assertRaises(ValidationError):
+            person.clean()
+
+    def test_adding_to_an_open_ledger_is_fine(self):
+        Person(name='Alice', ledger=self.open_ledger).clean()  # should not raise
