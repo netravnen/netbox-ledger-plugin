@@ -6,6 +6,12 @@
       <i class="mdi mdi-plus-thick"></i> Add Expense
     </a>
   {% endif %}
+  {% if can_add_settlement and not object.closed %}
+    <a href="{% url 'plugins:netbox_ledger_tracker:settlement_add' %}?ledger={{ object.pk }}&return_url={{ object.get_absolute_url }}"
+       class="btn btn-outline-primary btn-sm">
+      <i class="mdi mdi-cash-multiple"></i> Record Settlement
+    </a>
+  {% endif %}
   <a href="{% url 'plugins:netbox_ledger_tracker:ledger_settle_up' pk=object.pk %}" class="btn btn-outline-primary btn-sm">
     <i class="mdi mdi-calculator-variant"></i> Settle Up
   </a>

@@ -1,6 +1,6 @@
 from netbox.search import SearchIndex, register_search
 
-from .models import Currency, Expense, Ledger, Person
+from .models import Currency, Expense, Ledger, Person, Settlement
 
 
 @register_search
@@ -28,3 +28,10 @@ class ExpenseIndex(SearchIndex):
     model = Expense
     fields = (('name', 100), ('comments', 5000))
     display_attrs = ('ledger', 'amount', 'date')
+
+
+@register_search
+class SettlementIndex(SearchIndex):
+    model = Settlement
+    fields = (('comments', 5000),)
+    display_attrs = ('ledger', 'from_person', 'to_person', 'amount', 'date')

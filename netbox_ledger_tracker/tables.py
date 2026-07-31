@@ -1,7 +1,7 @@
 import django_tables2 as tables
 from netbox.tables import NetBoxTable, columns
 
-from .models import Currency, Expense, ExpensePart, Ledger, Person
+from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 
 class CurrencyTable(NetBoxTable):
@@ -73,6 +73,35 @@ class ExpenseTable(NetBoxTable):
             'tags',
         )
         default_columns = ('name', 'ledger', 'amount', 'currency', 'date')
+
+
+class SettlementTable(NetBoxTable):
+    pk = columns.ToggleColumn()
+    ledger = tables.Column(linkify=True)
+    from_person = tables.Column(linkify=True, verbose_name='From')
+    to_person = tables.Column(linkify=True, verbose_name='To')
+    currency = tables.Column(linkify=True)
+    method = columns.ChoiceFieldColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = Settlement
+        fields = (
+            'pk',
+            'id',
+            'ledger',
+            'from_person',
+            'to_person',
+            'amount',
+            'currency',
+            'amount_native',
+            'date',
+            'method',
+            'comments',
+            'created',
+            'last_updated',
+            'tags',
+        )
+        default_columns = ('date', 'ledger', 'from_person', 'to_person', 'amount', 'currency', 'method')
 
 
 class ExpensePartTable(NetBoxTable):

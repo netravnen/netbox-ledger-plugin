@@ -8,6 +8,12 @@
     <a href="{{ ledger.get_absolute_url }}" class="btn btn-outline-secondary btn-sm">
       <i class="mdi mdi-arrow-left"></i> Back to {{ ledger }}
     </a>
+    {% if not ledger.closed %}
+      <a href="{% url 'plugins:netbox_ledger_tracker:settlement_add' %}?ledger={{ ledger.pk }}&return_url={{ request.path }}"
+         class="btn btn-primary btn-sm">
+        <i class="mdi mdi-cash-multiple"></i> Record Settlement
+      </a>
+    {% endif %}
   </div>
 </div>
 
@@ -21,6 +27,14 @@
   {% for pk in inconsistent_expense_ids %}
     <a href="{% url 'plugins:netbox_ledger_tracker:expense' pk=pk %}">#{{ pk }}</a>{% if not forloop.last %}, {% endif %}
   {% endfor %}
+</div>
+{% endif %}
+
+{% if settlement_count %}
+<div class="alert alert-info">
+  {{ settlement_count }} recorded settlement{{ settlement_count|pluralize }}
+  {{ settlement_count|pluralize:"has,have" }} already been deducted from the figures below.
+  <a href="{% url 'plugins:netbox_ledger_tracker:settlement_list' %}?ledger_id={{ ledger.pk }}">View settlements</a>
 </div>
 {% endif %}
 

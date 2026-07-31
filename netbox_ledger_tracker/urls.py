@@ -26,6 +26,7 @@ urlpatterns = [
     *_model_urls('people', 'person'),
     *_model_urls('expenses', 'expense'),
     *_model_urls('expense-parts', 'expensepart'),
+    *_model_urls('settlements', 'settlement'),
     # Custom collection/detail views not attached via @register_model_view.
     path('expenses/split/add/', views.ExpenseSplitView.as_view(), name='expense_split_add'),
     path('expenses/<int:pk>/split/', views.ExpenseSplitView.as_view(), name='expense_split_edit'),

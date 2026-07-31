@@ -55,6 +55,27 @@ menu = PluginMenu(
             'Expenses',
             (
                 PluginMenuItem(
+                    link='plugins:netbox_ledger_tracker:settlement_list',
+                    link_text='Settlements',
+                    permissions=['netbox_ledger_tracker.view_settlement'],
+                    buttons=(
+                        PluginMenuButton(
+                            link='plugins:netbox_ledger_tracker:settlement_add',
+                            title='Add',
+                            icon_class='mdi mdi-plus-thick',
+                            color=ButtonColorChoices.GREEN,
+                            permissions=['netbox_ledger_tracker.add_settlement'],
+                        ),
+                        PluginMenuButton(
+                            link='plugins:netbox_ledger_tracker:settlement_bulk_import',
+                            title='Import',
+                            icon_class='mdi mdi-upload',
+                            color=ButtonColorChoices.BLUE,
+                            permissions=['netbox_ledger_tracker.add_settlement'],
+                        ),
+                    ),
+                ),
+                PluginMenuItem(
                     link='plugins:netbox_ledger_tracker:expense_list',
                     link_text='Expenses',
                     permissions=['netbox_ledger_tracker.view_expense'],

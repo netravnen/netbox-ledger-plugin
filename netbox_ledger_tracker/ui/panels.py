@@ -40,3 +40,15 @@ class ExpensePartPanel(ObjectAttributesPanel):
     has_paid = attrs.NumericAttr('has_paid', label='Paid')
     should_pay = attrs.NumericAttr('should_pay', label='Owes')
     auto_amount = attrs.BooleanAttr('auto_amount', label='Auto-split')
+
+
+class SettlementPanel(ObjectAttributesPanel):
+    title = 'Settlement'
+    ledger = attrs.RelatedObjectAttr('ledger', linkify=True)
+    from_person = attrs.RelatedObjectAttr('from_person', linkify=True, label='From')
+    to_person = attrs.RelatedObjectAttr('to_person', linkify=True, label='To')
+    amount = attrs.NumericAttr('amount')
+    currency = attrs.RelatedObjectAttr('currency', linkify=True)
+    amount_native = attrs.NumericAttr('amount_native', label='Amount (ledger currency)')
+    date = attrs.TextAttr('date')
+    method = attrs.ChoiceAttr('method')

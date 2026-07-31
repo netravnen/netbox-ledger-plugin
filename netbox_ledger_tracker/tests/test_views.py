@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person
+from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 User = get_user_model()
 
@@ -205,3 +205,50 @@ class LedgerSettleUpViewTest(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b'Could not calculate', response.content)
+
+    def _settle(self, amount):
+        return Settlement.objects.create(
+            ledger=self.ledger,
+            from_person=self.bob,
+            to_person=self.alice,
+            currency=self.currency,
+            amount=Decimal(amount),
+            date='2026-01-02',
+        )
+
+    def _matrix(self, response):
+        return response.context['matrix']
+
+    def test_settlement_is_deducted_under_basic(self):
+        self._dinner_split_evenly()
+        self._settle('50.00')
+
+        response = self._get()
+
+        self.assertEqual(response.status_code, 200)
+        # Bob owed Alice 50 and has now paid it, so nothing is left outstanding.
+        self.assertEqual(self._matrix(response)[self.alice.pk][self.bob.pk], Decimal('0.00'))
+        self.assertIn(b'already been deducted', response.content)
+
+    def test_partial_settlement_leaves_the_remainder_under_basic(self):
+        self._dinner_split_evenly()
+        self._settle('20.00')
+
+        response = self._get()
+
+        self.assertEqual(self._matrix(response)[self.alice.pk][self.bob.pk], Decimal('30.00'))
+
+    def test_settlement_is_deducted_under_optimized(self):
+        self.ledger.calc_method = 'optimized'
+        self.ledger.save()
+        self._dinner_split_evenly()
+        self._settle('50.00')
+
+        response = self._get()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._matrix(response)[self.alice.pk][self.bob.pk], Decimal('0.00'))
+
+    def test_no_banner_when_nothing_has_been_settled(self):
+        self._dinner_split_evenly()
+        self.assertNotIn(b'already been deducted', self._get().content)

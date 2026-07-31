@@ -1,9 +1,10 @@
 import django_filters
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from netbox.filtersets import NetBoxModelFilterSet
 
-from .choices import LedgerCalcMethodChoices
-from .models import Currency, Expense, ExpensePart, Ledger, Person
+from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
+from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 User = get_user_model()
 
@@ -108,3 +109,53 @@ class ExpensePartFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(person__name__icontains=value)
+
+
+class SettlementFilterSet(NetBoxModelFilterSet):
+    ledger_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Ledger.objects.all(),
+        label='Ledger (ID)',
+    )
+    ledger = django_filters.ModelMultipleChoiceFilter(
+        field_name='ledger__name',
+        queryset=Ledger.objects.all(),
+        to_field_name='name',
+        label='Ledger (name)',
+    )
+    from_person_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Person.objects.all(),
+        label='From person (ID)',
+    )
+    to_person_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Person.objects.all(),
+        label='To person (ID)',
+    )
+    person_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Person.objects.all(),
+        method='filter_person',
+        label='Either side (ID)',
+    )
+    currency_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Currency.objects.all(),
+        label='Currency (ID)',
+    )
+    method = django_filters.MultipleChoiceFilter(
+        field_name='method',
+        choices=SettlementMethodChoices,
+    )
+    date = django_filters.DateFromToRangeFilter()
+
+    class Meta:
+        model = Settlement
+        fields = ['id', 'amount', 'date']
+
+    def filter_person(self, queryset, name, value):
+        """Match settlements where the person is on either end of the transfer."""
+        if not value:
+            return queryset
+        return queryset.filter(Q(from_person__in=value) | Q(to_person__in=value)).distinct()
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            Q(from_person__name__icontains=value) | Q(to_person__name__icontains=value) | Q(comments__icontains=value)
+        )

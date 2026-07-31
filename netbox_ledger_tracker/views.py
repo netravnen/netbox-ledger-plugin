@@ -32,6 +32,7 @@ from .filtersets import (
     ExpensePartFilterSet,
     LedgerFilterSet,
     PersonFilterSet,
+    SettlementFilterSet,
 )
 from .forms import (
     CurrencyBulkEditForm,
@@ -55,10 +56,28 @@ from .forms import (
     PersonFilterForm,
     PersonForm,
     PersonImportForm,
+    SettlementBulkEditForm,
+    SettlementFilterForm,
+    SettlementForm,
+    SettlementImportForm,
 )
-from .models import Currency, Expense, ExpensePart, Ledger, Person
-from .tables import CurrencyTable, ExpensePartTable, ExpenseTable, LedgerTable, PersonTable
-from .ui.panels import CurrencyPanel, ExpensePanel, ExpensePartPanel, LedgerPanel, PersonPanel
+from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
+from .tables import (
+    CurrencyTable,
+    ExpensePartTable,
+    ExpenseTable,
+    LedgerTable,
+    PersonTable,
+    SettlementTable,
+)
+from .ui.panels import (
+    CurrencyPanel,
+    ExpensePanel,
+    ExpensePartPanel,
+    LedgerPanel,
+    PersonPanel,
+    SettlementPanel,
+)
 
 ###
 # Currency
@@ -141,12 +160,19 @@ class LedgerView(ObjectView):
                 filters={'ledger_id': lambda ctx: ctx['object'].pk},
                 exclude_columns=['ledger'],
             ),
+            ObjectsTablePanel(
+                model='netbox_ledger_tracker.settlement',
+                title='Settlements',
+                filters={'ledger_id': lambda ctx: ctx['object'].pk},
+                exclude_columns=['ledger'],
+            ),
         ],
     )
 
     def get_extra_context(self, request, instance):
         return {
             'can_add_expense': request.user.has_perm('netbox_ledger_tracker.add_expense'),
+            'can_add_settlement': request.user.has_perm('netbox_ledger_tracker.add_settlement'),
         }
 
 
@@ -225,15 +251,29 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
 
             calc_data.append({'whopaid': whopaid, 'whoshouldpay': whoshouldpay})
 
+        # Money already handed over reduces what is still outstanding, so the
+        # matrix shows what remains rather than the original debt.
+        settlement_rows = Settlement.objects.filter(ledger=ledger)
+        settlement_data = [
+            {
+                'from': settlement.from_person_id,
+                'to': settlement.to_person_id,
+                'amount': Fraction(settlement.amount_native),
+            }
+            for settlement in settlement_rows
+        ]
+
         matrix = None
         error = None
         if calc_data and people_by_id:
             person_ids = list(people_by_id)
             try:
                 if ledger.calc_method == LedgerCalcMethodChoices.OPTIMIZED:
-                    fraction_result = solve_mincost_problem_for_expenses(calc_data, person_ids)
+                    fraction_result = solve_mincost_problem_for_expenses(
+                        calc_data, person_ids, settlements=settlement_data
+                    )
                 else:
-                    fraction_result = basic_calc(calc_data, person_ids)
+                    fraction_result = basic_calc(calc_data, person_ids, settlements=settlement_data)
             except nx.NetworkXUnfeasible:
                 error = (
                     'Could not calculate an optimized settlement because the expense data is inconsistent. '
@@ -252,6 +292,7 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
                 'matrix': matrix,
                 'error': error,
                 'inconsistent_expense_ids': inconsistent_expense_ids,
+                'settlement_count': len(settlement_data),
             },
         )
 
@@ -620,3 +661,59 @@ class ExpensePartBulkEditView(BulkEditView):
 class ExpensePartBulkDeleteView(BulkDeleteView):
     queryset = ExpensePart.objects.all()
     table = ExpensePartTable
+
+
+###
+# Settlement
+###
+
+
+@register_model_view(Settlement)
+class SettlementView(ObjectView):
+    actions = (CloneObject, EditObject, DeleteObject)
+    queryset = Settlement.objects.select_related('ledger', 'from_person', 'to_person', 'currency').prefetch_related(
+        'tags'
+    )
+    layout = SimpleLayout(
+        left_panels=[SettlementPanel()],
+        right_panels=[TemplatePanel('inc/panels/tags.html')],
+    )
+
+
+@register_model_view(Settlement, name='list', path='', detail=False)
+class SettlementListView(ObjectListView):
+    queryset = Settlement.objects.select_related('ledger', 'from_person', 'to_person', 'currency')
+    table = SettlementTable
+    filterset = SettlementFilterSet
+    filterset_form = SettlementFilterForm
+
+
+@register_model_view(Settlement, name='add', detail=False)
+@register_model_view(Settlement, name='edit')
+class SettlementEditView(ObjectEditView):
+    queryset = Settlement.objects.all()
+    form = SettlementForm
+
+
+@register_model_view(Settlement, name='delete')
+class SettlementDeleteView(ObjectDeleteView):
+    queryset = Settlement.objects.all()
+
+
+@register_model_view(Settlement, name='bulk_import', path='import', detail=False)
+class SettlementBulkImportView(BulkImportView):
+    queryset = Settlement.objects.all()
+    model_form = SettlementImportForm
+
+
+@register_model_view(Settlement, name='bulk_edit', path='edit', detail=False)
+class SettlementBulkEditView(BulkEditView):
+    queryset = Settlement.objects.all()
+    table = SettlementTable
+    form = SettlementBulkEditForm
+
+
+@register_model_view(Settlement, name='bulk_delete', path='delete', detail=False)
+class SettlementBulkDeleteView(BulkDeleteView):
+    queryset = Settlement.objects.all()
+    table = SettlementTable

@@ -13,8 +13,8 @@ from utilities.forms.fields import (
     TagFilterField,
 )
 
-from .choices import LedgerCalcMethodChoices
-from .models import Currency, Expense, ExpensePart, Ledger, Person
+from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
+from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 User = get_user_model()
 
@@ -201,6 +201,59 @@ class ExpensePartFilterForm(NetBoxModelFilterSetForm):
     model = ExpensePart
     expense_id = DynamicModelChoiceField(queryset=Expense.objects.all(), required=False, label='Expense')
     person_id = DynamicModelChoiceField(queryset=Person.objects.all(), required=False, label='Person')
+    tag = TagFilterField(model)
+
+
+###
+# Settlement
+###
+
+
+class SettlementForm(NetBoxModelForm):
+    ledger = DynamicModelChoiceField(queryset=Ledger.objects.exclude(closed=True))
+    from_person = DynamicModelChoiceField(
+        queryset=Person.objects.all(),
+        query_params={'ledger_id': '$ledger'},
+        label='From',
+    )
+    to_person = DynamicModelChoiceField(
+        queryset=Person.objects.all(),
+        query_params={'ledger_id': '$ledger'},
+        label='To',
+    )
+    currency = DynamicModelChoiceField(queryset=Currency.objects.all())
+
+    class Meta:
+        model = Settlement
+        fields = ['ledger', 'from_person', 'to_person', 'amount', 'currency', 'date', 'method', 'comments', 'tags']
+        widgets = {'date': forms.DateInput(attrs={'type': 'date'})}
+
+
+class SettlementImportForm(NetBoxModelImportForm):
+    ledger = CSVModelChoiceField(queryset=Ledger.objects.all(), to_field_name='name')
+    from_person = CSVModelChoiceField(queryset=Person.objects.all(), to_field_name='name')
+    to_person = CSVModelChoiceField(queryset=Person.objects.all(), to_field_name='name')
+    currency = CSVModelChoiceField(queryset=Currency.objects.all(), to_field_name='iso4217_code')
+
+    class Meta:
+        model = Settlement
+        fields = ('ledger', 'from_person', 'to_person', 'amount', 'currency', 'date', 'method', 'comments', 'tags')
+
+
+class SettlementBulkEditForm(NetBoxModelBulkEditForm):
+    model = Settlement
+    date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    method = forms.ChoiceField(choices=SettlementMethodChoices, required=False)
+    comments = forms.CharField(required=False, widget=forms.Textarea)
+    nullable_fields = ['comments', 'method']
+
+
+class SettlementFilterForm(NetBoxModelFilterSetForm):
+    model = Settlement
+    ledger_id = DynamicModelChoiceField(queryset=Ledger.objects.all(), required=False, label='Ledger')
+    person_id = DynamicModelChoiceField(queryset=Person.objects.all(), required=False, label='Either side')
+    currency_id = DynamicModelChoiceField(queryset=Currency.objects.all(), required=False, label='Currency')
+    method = forms.MultipleChoiceField(choices=SettlementMethodChoices, required=False)
     tag = TagFilterField(model)
 
 
