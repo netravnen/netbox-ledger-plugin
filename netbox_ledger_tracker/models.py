@@ -22,6 +22,58 @@ def _to_money(value):
     return Decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
 
+class FrozenRateMixin:
+    """Restates ``amount`` in the ledger currency using a rate frozen on first save.
+
+    Deliberately a plain mixin rather than an abstract model: the concrete models
+    declare their own columns, so this contributes no fields and cannot perturb
+    their migrations. Consumers must provide ``ledger``, ``currency``, ``amount``,
+    ``amount_native`` and ``fx_rate``.
+
+    Deriving here rather than in a view means every write path -- a bespoke
+    screen, the plain edit form, bulk import, clone, the REST API and any script
+    -- converts identically and none can forget to. Freezing the rate means a
+    later run of ``get_ledger_currency_rates`` cannot silently re-price figures
+    people have already settled on.
+    """
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Remember which currency/ledger this row was loaded with so save() can tell
+        # whether the frozen fx_rate still applies.
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_currency_id = getattr(instance, 'currency_id', None)
+        instance._loaded_ledger_id = getattr(instance, 'ledger_id', None)
+        return instance
+
+    def _derive_native_amounts(self):
+        if not (self.ledger_id and self.currency_id):
+            return
+
+        rate_is_stale = (
+            self.fx_rate is None
+            or self._state.adding
+            or self.currency_id != getattr(self, '_loaded_currency_id', self.currency_id)
+            or self.ledger_id != getattr(self, '_loaded_ledger_id', self.ledger_id)
+        )
+        if rate_is_stale:
+            self.fx_rate = rate_between(self.currency, self.ledger.currency)
+
+        self.amount_native = _to_money(self.amount * self.fx_rate)
+
+    def full_clean(self, *args, **kwargs):
+        # clean_fields() runs before clean() and would reject the not-null
+        # amount_native/fx_rate before any hook could populate them.
+        self._derive_native_amounts()
+        super().full_clean(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self._derive_native_amounts()
+        super().save(*args, **kwargs)
+        self._loaded_currency_id = self.currency_id
+        self._loaded_ledger_id = self.ledger_id
+
+
 validate_iso4217_code = RegexValidator(
     regex=r'^[A-Z]{3}$',
     message='Enter a valid ISO 4217 currency code (three uppercase letters, e.g. DKK, EUR, USD).',
@@ -128,7 +180,7 @@ class Person(NetBoxModel):
         return reverse('plugins:netbox_ledger_tracker:person', args=[self.pk])
 
 
-class Expense(NetBoxModel):
+class Expense(FrozenRateMixin, NetBoxModel):
     """A single shared expense recorded against a Ledger."""
 
     clone_fields = ['ledger', 'currency', 'date']
@@ -171,48 +223,6 @@ class Expense(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse('plugins:netbox_ledger_tracker:expense', args=[self.pk])
-
-    @classmethod
-    def from_db(cls, db, field_names, values):
-        # Remember which currency/ledger this row was loaded with so save() can tell
-        # whether the frozen fx_rate still applies.
-        instance = super().from_db(db, field_names, values)
-        instance._loaded_currency_id = getattr(instance, 'currency_id', None)
-        instance._loaded_ledger_id = getattr(instance, 'ledger_id', None)
-        return instance
-
-    def _derive_native_amounts(self):
-        """Freeze the exchange rate and restate the amount in the ledger currency.
-
-        Deriving this here rather than in a view means every write path -- the
-        split screen, the plain edit form, bulk import, clone, the REST API and
-        any script -- converts identically and cannot forget to.
-        """
-        if not (self.ledger_id and self.currency_id):
-            return
-
-        rate_is_stale = (
-            self.fx_rate is None
-            or self._state.adding
-            or self.currency_id != getattr(self, '_loaded_currency_id', self.currency_id)
-            or self.ledger_id != getattr(self, '_loaded_ledger_id', self.ledger_id)
-        )
-        if rate_is_stale:
-            self.fx_rate = rate_between(self.currency, self.ledger.currency)
-
-        self.amount_native = _to_money(self.amount * self.fx_rate)
-
-    def full_clean(self, *args, **kwargs):
-        # clean_fields() runs before clean() and would reject the not-null
-        # amount_native/fx_rate before any hook could populate them.
-        self._derive_native_amounts()
-        super().full_clean(*args, **kwargs)
-
-    def save(self, *args, **kwargs):
-        self._derive_native_amounts()
-        super().save(*args, **kwargs)
-        self._loaded_currency_id = self.currency_id
-        self._loaded_ledger_id = self.ledger_id
 
     def clean(self):
         super().clean()
