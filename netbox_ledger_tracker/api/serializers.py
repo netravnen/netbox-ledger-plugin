@@ -91,6 +91,7 @@ class ExpenseSerializer(NetBoxModelSerializer):
             'currency',
             'amount',
             'amount_native',
+            'fx_rate',
             'date',
             'comments',
             'tags',
@@ -99,6 +100,9 @@ class ExpenseSerializer(NetBoxModelSerializer):
             'last_updated',
         ]
         brief_fields = ['id', 'url', 'display', 'name']
+        # Both are derived from the ledger currency and the frozen rate; accepting
+        # a client-supplied value would let the API contradict the maths.
+        read_only_fields = ['amount_native', 'fx_rate']
 
 
 class ExpensePartSerializer(NetBoxModelSerializer):
@@ -125,3 +129,6 @@ class ExpensePartSerializer(NetBoxModelSerializer):
             'last_updated',
         ]
         brief_fields = ['id', 'url', 'display']
+        # Restated from the parent expense's frozen rate on every save, so a
+        # client-supplied value would be silently overwritten anyway.
+        read_only_fields = ['has_paid_native', 'should_pay_native']
