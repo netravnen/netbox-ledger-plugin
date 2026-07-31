@@ -4,9 +4,101 @@ from fractions import Fraction
 from django.test import TestCase
 from networkx import NetworkXUnfeasible
 
+from netbox_ledger_tracker.calc.balances import apply_settlements, compute_balances
 from netbox_ledger_tracker.calc.basic import basic_calc
 from netbox_ledger_tracker.calc.matrix import result_to_matrix
 from netbox_ledger_tracker.calc.mincost import force_feasible, solve_mincost_problem_for_expenses
+
+# One person covers a 100 dinner split evenly: person 2 ends up owing person 1 fifty.
+DINNER = [
+    {
+        'whopaid': [{'personId': 1, 'amount': Fraction(100)}],
+        'whoshouldpay': {1: Fraction(50), 2: Fraction(50)},
+    }
+]
+
+
+class ComputeBalancesTest(TestCase):
+    def test_balances_are_signed_net_positions(self):
+        balances = compute_balances(DINNER, [1, 2])
+        self.assertEqual(balances[1], Fraction(50))
+        self.assertEqual(balances[2], Fraction(-50))
+
+    def test_balances_sum_to_zero(self):
+        balances = compute_balances(DINNER, [1, 2])
+        self.assertEqual(sum(balances.values()), 0)
+
+    def test_auto_share_splits_the_remainder(self):
+        expenses = [
+            {
+                'whopaid': [{'personId': 1, 'amount': Fraction(90)}],
+                'whoshouldpay': {1: Fraction(30), 2: None, 3: None},
+            }
+        ]
+        balances = compute_balances(expenses, [1, 2, 3])
+        self.assertEqual(balances[1], Fraction(60))
+        self.assertEqual(balances[2], Fraction(-30))
+        self.assertEqual(balances[3], Fraction(-30))
+
+
+class ApplySettlementsTest(TestCase):
+    def test_settlement_moves_both_balances(self):
+        balances = compute_balances(DINNER, [1, 2])
+        adjusted = apply_settlements(balances, [{'from': 2, 'to': 1, 'amount': Fraction(50)}])
+        self.assertEqual(adjusted[1], 0)
+        self.assertEqual(adjusted[2], 0)
+
+    def test_partial_settlement_leaves_the_remainder(self):
+        balances = compute_balances(DINNER, [1, 2])
+        adjusted = apply_settlements(balances, [{'from': 2, 'to': 1, 'amount': Fraction(20)}])
+        self.assertEqual(adjusted[1], Fraction(30))
+        self.assertEqual(adjusted[2], Fraction(-30))
+
+    def test_overpayment_reverses_the_balance(self):
+        balances = compute_balances(DINNER, [1, 2])
+        adjusted = apply_settlements(balances, [{'from': 2, 'to': 1, 'amount': Fraction(80)}])
+        self.assertEqual(adjusted[1], Fraction(-30))
+        self.assertEqual(adjusted[2], Fraction(30))
+
+    def test_does_not_mutate_the_input(self):
+        balances = compute_balances(DINNER, [1, 2])
+        apply_settlements(balances, [{'from': 2, 'to': 1, 'amount': Fraction(50)}])
+        self.assertEqual(balances[1], Fraction(50))
+
+
+class SettlementIntegrationTest(TestCase):
+    """A recorded payment has to clear the debt under both algorithms."""
+
+    def test_basic_full_settlement_clears_the_debt(self):
+        debts = basic_calc(DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(50)}])
+        self.assertEqual(debts[2][1], 0)
+        self.assertEqual(debts[1][2], 0)
+
+    def test_basic_partial_settlement_leaves_the_remainder(self):
+        debts = basic_calc(DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(20)}])
+        self.assertEqual(debts[2][1], Fraction(30))
+        self.assertEqual(debts[1][2], 0)
+
+    def test_basic_overpayment_flips_the_direction(self):
+        debts = basic_calc(DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(80)}])
+        self.assertEqual(debts[1][2], Fraction(30))
+        self.assertEqual(debts[2][1], 0)
+
+    def test_optimized_full_settlement_clears_the_debt(self):
+        result = solve_mincost_problem_for_expenses(
+            DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(50)}]
+        )
+        self.assertEqual(result[2][1], 0)
+        self.assertEqual(result[1][2], 0)
+
+    def test_optimized_partial_settlement_leaves_the_remainder(self):
+        result = solve_mincost_problem_for_expenses(
+            DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(20)}]
+        )
+        self.assertEqual(result[2][1], Fraction(30))
+
+    def test_no_settlements_matches_the_unsettled_result(self):
+        self.assertEqual(basic_calc(DINNER, [1, 2]), basic_calc(DINNER, [1, 2], settlements=[]))
 
 
 class BasicCalcTest(TestCase):
