@@ -5,7 +5,7 @@ from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from users.api.serializers import UserSerializer
 
-from ..models import Currency, Expense, ExpensePart, Ledger, Person
+from ..models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 User = get_user_model()
 
@@ -132,3 +132,36 @@ class ExpensePartSerializer(NetBoxModelSerializer):
         # Restated from the parent expense's frozen rate on every save, so a
         # client-supplied value would be silently overwritten anyway.
         read_only_fields = ['has_paid_native', 'should_pay_native']
+
+
+class SettlementSerializer(NetBoxModelSerializer):
+    url = serializers.HyperlinkedIdentityField(view_name='plugins-api:netbox_ledger_tracker-api:settlement-detail')
+    ledger = LedgerSerializer(nested=True)
+    from_person = PersonSerializer(nested=True)
+    to_person = PersonSerializer(nested=True)
+    currency = CurrencySerializer(nested=True)
+
+    class Meta:
+        model = Settlement
+        fields = [
+            'id',
+            'url',
+            'display',
+            'ledger',
+            'from_person',
+            'to_person',
+            'amount',
+            'currency',
+            'amount_native',
+            'fx_rate',
+            'date',
+            'method',
+            'comments',
+            'tags',
+            'custom_fields',
+            'created',
+            'last_updated',
+        ]
+        brief_fields = ['id', 'url', 'display', 'amount']
+        # Derived from the ledger currency and the frozen rate.
+        read_only_fields = ['amount_native', 'fx_rate']

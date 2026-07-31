@@ -1,7 +1,7 @@
 import strawberry
 import strawberry_django
 
-from .types import CurrencyType, ExpensePartType, ExpenseType, LedgerType, PersonType
+from .types import CurrencyType, ExpensePartType, ExpenseType, LedgerType, PersonType, SettlementType
 
 
 # Keep the GraphQL root type named "Query" (matching the other plugins and the
@@ -23,6 +23,9 @@ class LedgerTrackerQuery:
 
     expense_part: ExpensePartType = strawberry_django.field()
     expense_part_list: list[ExpensePartType] = strawberry_django.field()
+
+    settlement: SettlementType = strawberry_django.field()
+    settlement_list: list[SettlementType] = strawberry_django.field()
 
 
 schema = strawberry.Schema(query=LedgerTrackerQuery)

@@ -41,3 +41,14 @@ class ExpensePartGraphQLFilter:
     has_paid: auto
     should_pay: auto
     auto_amount: auto
+
+
+@strawberry_django.filter_type(models.Settlement, lookups=True)
+class SettlementGraphQLFilter:
+    ledger: auto
+    from_person: auto
+    to_person: auto
+    currency: auto
+    amount: auto
+    date: auto
+    method: auto

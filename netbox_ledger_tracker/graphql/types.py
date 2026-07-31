@@ -8,6 +8,7 @@ from .filters import (
     ExpensePartGraphQLFilter,
     LedgerGraphQLFilter,
     PersonGraphQLFilter,
+    SettlementGraphQLFilter,
 )
 
 
@@ -53,4 +54,13 @@ class ExpenseType(NetBoxObjectType):
     filters=ExpensePartGraphQLFilter,
 )
 class ExpensePartType(NetBoxObjectType):
+    pass
+
+
+@strawberry_django.type(
+    models.Settlement,
+    fields='__all__',
+    filters=SettlementGraphQLFilter,
+)
+class SettlementType(NetBoxObjectType):
     pass
