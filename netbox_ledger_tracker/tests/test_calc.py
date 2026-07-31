@@ -77,9 +77,15 @@ class MincostCalcTest(TestCase):
             [{'whopaid': [{'personId': 60, 'amount': Fraction(1, 2)}], 'whoshouldpay': {60: Fraction(1, 6)}}],
             [61, 60],
         )
-        # the synthetic person absorbs the imbalance; the real people's mutual debt is unaffected
-        self.assertEqual(result[61][60], Fraction(1, 3))
+        # Person 60 paid 1/2 but was assigned a share of only 1/6, leaving 1/3
+        # unaccounted for. The synthetic person absorbs exactly that, so the two
+        # real people are left owing each other nothing -- person 61 is party to
+        # neither the payment nor the split, so their balance is zero.
+        self.assertEqual(result[61][60], 0)
         self.assertEqual(result[60][61], 0)
+
+        (synthetic_id,) = [person_id for person_id in result if person_id not in (60, 61)]
+        self.assertEqual(result[synthetic_id][60], Fraction(1, 3))
 
 
 class ResultToMatrixTest(TestCase):
