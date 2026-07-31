@@ -7,6 +7,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import View
 from netbox.object_actions import CloneObject, DeleteObject, EditObject
+from netbox.plugins import get_plugin_config
 from netbox.ui.layout import SimpleLayout
 from netbox.ui.panels import ObjectsTablePanel, TemplatePanel
 from netbox.views.generic import (
@@ -24,6 +25,7 @@ from .calc.basic import basic_calc
 from .calc.currency import result_to_decimal
 from .calc.matrix import result_to_matrix
 from .calc.mincost import solve_mincost_problem_for_expenses
+from .calc.minpayments import solve_min_payments_for_expenses
 from .choices import LedgerCalcMethodChoices
 from .filtersets import (
     CurrencyFilterSet,
@@ -235,12 +237,27 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
         # same helper the balance table uses, so the two cannot disagree.
         calc_data, settlement_data, inconsistent_expense_ids = build_ledger_calc_inputs(ledger)
 
+        balances = ledger_person_balances(ledger, people)
+        max_exact_people = get_plugin_config('netbox_ledger_tracker', 'minimal_max_people', 12)
+        # The exact partition is exponential, so say so rather than silently
+        # handing back a different algorithm's answer.
+        minimal_fell_back = ledger.calc_method == LedgerCalcMethodChoices.MINIMAL and (
+            sum(1 for row in balances if row['net'] != 0) > max_exact_people
+        )
+
         matrix = None
         error = None
         if calc_data and people_by_id:
             person_ids = list(people_by_id)
             try:
-                if ledger.calc_method == LedgerCalcMethodChoices.OPTIMIZED:
+                if ledger.calc_method == LedgerCalcMethodChoices.MINIMAL:
+                    fraction_result = solve_min_payments_for_expenses(
+                        calc_data,
+                        person_ids,
+                        settlements=settlement_data,
+                        max_exact_people=max_exact_people,
+                    )
+                elif ledger.calc_method == LedgerCalcMethodChoices.OPTIMIZED:
                     fraction_result = solve_mincost_problem_for_expenses(
                         calc_data, person_ids, settlements=settlement_data
                     )
@@ -265,7 +282,9 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
                 'error': error,
                 'inconsistent_expense_ids': inconsistent_expense_ids,
                 'settlement_count': len(settlement_data),
-                'balances': ledger_person_balances(ledger, people),
+                'balances': balances,
+                'minimal_fell_back': minimal_fell_back,
+                'minimal_max_people': max_exact_people,
             },
         )
 

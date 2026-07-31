@@ -7,7 +7,16 @@ from networkx import NetworkXUnfeasible
 from netbox_ledger_tracker.calc.balances import apply_settlements, compute_balances
 from netbox_ledger_tracker.calc.basic import basic_calc
 from netbox_ledger_tracker.calc.matrix import result_to_matrix
-from netbox_ledger_tracker.calc.mincost import force_feasible, solve_mincost_problem_for_expenses
+from netbox_ledger_tracker.calc.mincost import (
+    force_feasible,
+    solve_from_balances,
+    solve_mincost_problem_for_expenses,
+)
+from netbox_ledger_tracker.calc.minpayments import (
+    partition_zero_sum,
+    solve_min_payments,
+    solve_min_payments_for_expenses,
+)
 
 # One person covers a 100 dinner split evenly: person 2 ends up owing person 1 fifty.
 DINNER = [
@@ -99,6 +108,86 @@ class SettlementIntegrationTest(TestCase):
 
     def test_no_settlements_matches_the_unsettled_result(self):
         self.assertEqual(basic_calc(DINNER, [1, 2]), basic_calc(DINNER, [1, 2], settlements=[]))
+
+
+class MinPaymentsTest(TestCase):
+    @staticmethod
+    def _transfer_count(result):
+        return sum(1 for receivers in result.values() for amount in receivers.values() if amount)
+
+    def test_partitions_into_zero_sum_groups(self):
+        balances = {'A': Fraction(10), 'B': Fraction(-10), 'C': Fraction(10), 'D': Fraction(-10)}
+        groups = partition_zero_sum(balances)
+        self.assertEqual(len(groups), 2)
+        for group in groups:
+            self.assertEqual(sum(balances[person] for person in group), 0)
+
+    def test_falls_back_to_one_group_when_nothing_nets_out(self):
+        balances = {'A': Fraction(30), 'B': Fraction(-10), 'C': Fraction(-10), 'D': Fraction(-10)}
+        self.assertEqual(len(partition_zero_sum(balances)), 1)
+
+    def test_uses_fewer_transfers_than_the_minimum_cost_solver(self):
+        # Found by comparing the two solvers over random balances: {C, E} and
+        # {A, B, D} each net to zero, so this settles in three transfers while
+        # the minimum-cost solver spends four.
+        balances = {
+            'A': Fraction(-3),
+            'B': Fraction(-38),
+            'C': Fraction(20),
+            'D': Fraction(41),
+            'E': Fraction(-20),
+        }
+        people = list(balances)
+
+        optimized = solve_from_balances(balances, people)
+        minimal = solve_min_payments(balances, people)
+
+        self.assertEqual(self._transfer_count(optimized), 4)
+        self.assertEqual(self._transfer_count(minimal), 3)
+
+    def test_settles_every_balance(self):
+        balances = {
+            'A': Fraction(-3),
+            'B': Fraction(-38),
+            'C': Fraction(20),
+            'D': Fraction(41),
+            'E': Fraction(-20),
+        }
+        result = solve_min_payments(balances, list(balances))
+
+        # A person's balance is what flows in minus what flows out: someone owed
+        # 41 must receive exactly 41, and someone owing 38 must send exactly 38.
+        net = dict.fromkeys(balances, Fraction(0))
+        for payer, receivers in result.items():
+            for receiver, amount in receivers.items():
+                net[payer] -= amount
+                net[receiver] += amount
+        for person, balance in balances.items():
+            self.assertEqual(net[person], balance)
+
+    def test_people_already_square_are_left_alone(self):
+        balances = {'A': Fraction(10), 'B': Fraction(-10), 'C': Fraction(0)}
+        result = solve_min_payments(balances, list(balances))
+        self.assertNotIn('C', result)
+
+    def test_nothing_to_do_when_everyone_is_settled(self):
+        self.assertEqual(solve_min_payments({'A': Fraction(0), 'B': Fraction(0)}, ['A', 'B']), {})
+
+    def test_falls_back_above_the_exact_search_limit(self):
+        # Two obvious zero-sum pairs, but a limit of 3 forbids the exact search,
+        # so this must return the minimum-cost answer rather than hang or fail.
+        balances = {'A': Fraction(10), 'B': Fraction(-10), 'C': Fraction(10), 'D': Fraction(-10)}
+        people = list(balances)
+
+        result = solve_min_payments(balances, people, max_exact_people=3)
+
+        self.assertEqual(result, solve_from_balances(balances, people))
+
+    def test_settlements_are_netted_before_minimising(self):
+        result = solve_min_payments_for_expenses(
+            DINNER, [1, 2], settlements=[{'from': 2, 'to': 1, 'amount': Fraction(50)}]
+        )
+        self.assertEqual(self._transfer_count(result), 0)
 
 
 class BasicCalcTest(TestCase):

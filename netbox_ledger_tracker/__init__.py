@@ -27,6 +27,10 @@ class LedgerTrackerConfig(PluginConfig):
         'base_currency': 'DKK',
         # Default Ledger.calc_method for newly created ledgers.
         'default_calc_method': 'basic',
+        # Cap on the exact zero-sum partition search used by the 'minimal'
+        # calc method. The search is O(3^n), so above this many people with a
+        # non-zero balance it falls back to the 'optimized' solver.
+        'minimal_max_people': 12,
         # Feed used by the get_ledger_currency_rates management command.
         'currency_rate_feed_url': 'https://www.nationalbanken.dk/_vti_bin/DN/DataService.svc/CurrencyRatesXML?lang=da',
     }

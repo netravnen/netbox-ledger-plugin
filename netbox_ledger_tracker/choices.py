@@ -6,10 +6,12 @@ class LedgerCalcMethodChoices(ChoiceSet):
 
     BASIC = 'basic'
     OPTIMIZED = 'optimized'
+    MINIMAL = 'minimal'
 
     CHOICES = [
         (BASIC, 'Basic (pairwise netting)', 'blue'),
         (OPTIMIZED, 'Optimized (minimum-cost settlement)', 'green'),
+        (MINIMAL, 'Minimal (fewest payments)', 'purple'),
     ]
 
 

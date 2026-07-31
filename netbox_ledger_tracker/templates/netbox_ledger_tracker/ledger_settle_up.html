@@ -38,6 +38,15 @@
 </div>
 {% endif %}
 
+{% if minimal_fell_back %}
+<div class="alert alert-warning">
+  This ledger has more than {{ minimal_max_people }} people with an outstanding
+  balance, which is too many to search for the fewest-payments answer exactly.
+  The minimum-cost settlement is shown instead &mdash; it is still correct, just
+  possibly one or two transfers longer.
+</div>
+{% endif %}
+
 {% if balances %}
 {% include 'netbox_ledger_tracker/inc/balances.html' %}
 <div class="mb-3"></div>
