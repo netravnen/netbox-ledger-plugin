@@ -22,7 +22,7 @@ from netbox.views.generic import (
 from utilities.views import ContentTypePermissionRequiredMixin, GetReturnURLMixin, register_model_view
 
 from .calc.basic import basic_calc
-from .calc.currency import convert_currency, result_to_decimal
+from .calc.currency import result_to_decimal
 from .calc.matrix import result_to_matrix
 from .calc.mincost import solve_mincost_problem_for_expenses
 from .choices import LedgerCalcMethodChoices
@@ -544,7 +544,6 @@ class ExpenseSplitView(ContentTypePermissionRequiredMixin, GetReturnURLMixin, Vi
             expense.ledger = ledger
             expense.currency = currency
             expense.amount = amount
-            expense.amount_native = convert_currency(amount, currency, ledger.currency)
             expense.date = form.cleaned_data['date']
             expense.comments = form.cleaned_data.get('comments', '')
             expense.full_clean()
@@ -558,13 +557,13 @@ class ExpenseSplitView(ContentTypePermissionRequiredMixin, GetReturnURLMixin, Vi
                     remaining_to_absorb = Decimal('0')
                 else:
                     share = part_data['should_pay']
+                # The *_native columns are derived by ExpensePart.save() from the
+                # expense's frozen rate, so they are deliberately not set here.
                 part = ExpensePart(
                     expense=expense,
                     person=person,
                     has_paid=part_data['has_paid'],
-                    has_paid_native=convert_currency(part_data['has_paid'], currency, ledger.currency),
                     should_pay=share,
-                    should_pay_native=convert_currency(share, currency, ledger.currency),
                     auto_amount=part_data['should_pay'] is None,
                 )
                 part.full_clean()

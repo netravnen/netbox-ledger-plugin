@@ -2,8 +2,34 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from netbox_ledger_tracker.forms import CurrencyForm, ExpenseSplitForm, LedgerPickerForm
+from netbox_ledger_tracker.forms import CurrencyForm, ExpenseImportForm, ExpenseSplitForm, LedgerPickerForm
 from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person
+
+
+class ExpenseImportFormTest(TestCase):
+    """Bulk import used to store the raw amount as if it were already converted."""
+
+    def setUp(self):
+        self.dkk = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.eur = Currency.objects.create(iso4217_code='EUR', base_rate=Decimal('7.46'))
+        self.ledger = Ledger.objects.create(name='Summer trip', currency=self.dkk)
+
+    def test_import_converts_into_the_ledger_currency(self):
+        form = ExpenseImportForm(
+            data={
+                'name': 'Dinner',
+                'ledger': self.ledger.name,
+                'currency': self.eur.iso4217_code,
+                'amount': '100.00',
+                'date': '2026-01-01',
+            }
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        expense = form.save()
+
+        self.assertEqual(expense.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(expense.amount_native, Decimal('746.00'))
 
 
 class CurrencyFormTest(TestCase):

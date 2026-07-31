@@ -158,13 +158,6 @@ class ExpenseImportForm(NetBoxModelImportForm):
         model = Expense
         fields = ('name', 'ledger', 'currency', 'amount', 'date', 'comments', 'tags')
 
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        instance.amount_native = instance.amount
-        if commit:
-            instance.save()
-        return instance
-
 
 class ExpenseBulkEditForm(NetBoxModelBulkEditForm):
     model = Expense
