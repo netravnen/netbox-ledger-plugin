@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
@@ -8,9 +8,19 @@ from django.db import models
 from django.urls import reverse
 from netbox.models import NetBoxModel
 
+from .calc.currency import rate_between
 from .choices import LedgerCalcMethodChoices
 
 User = get_user_model()
+
+# Money is stored to two places; conversions round half-up rather than the
+# decimal module's default banker's rounding, which is what people expect on a bill.
+MONEY_QUANT = Decimal('0.01')
+
+
+def _to_money(value):
+    return Decimal(value).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
 
 validate_iso4217_code = RegexValidator(
     regex=r'^[A-Z]{3}$',
@@ -137,6 +147,16 @@ class Expense(NetBoxModel):
         editable=False,
         help_text='Amount converted to the ledger currency at the time this expense was saved.',
     )
+    fx_rate = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        editable=False,
+        help_text=(
+            'Ledger-currency units per unit of the expense currency. Frozen when the '
+            'expense is first saved, so later exchange-rate updates do not silently '
+            're-price historical expenses.'
+        ),
+    )
     date = models.DateField()
     people = models.ManyToManyField(to=Person, through='ExpensePart', related_name='expenses')
     comments = models.TextField(blank=True)
@@ -151,6 +171,48 @@ class Expense(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse('plugins:netbox_ledger_tracker:expense', args=[self.pk])
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        # Remember which currency/ledger this row was loaded with so save() can tell
+        # whether the frozen fx_rate still applies.
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_currency_id = getattr(instance, 'currency_id', None)
+        instance._loaded_ledger_id = getattr(instance, 'ledger_id', None)
+        return instance
+
+    def _derive_native_amounts(self):
+        """Freeze the exchange rate and restate the amount in the ledger currency.
+
+        Deriving this here rather than in a view means every write path -- the
+        split screen, the plain edit form, bulk import, clone, the REST API and
+        any script -- converts identically and cannot forget to.
+        """
+        if not (self.ledger_id and self.currency_id):
+            return
+
+        rate_is_stale = (
+            self.fx_rate is None
+            or self._state.adding
+            or self.currency_id != getattr(self, '_loaded_currency_id', self.currency_id)
+            or self.ledger_id != getattr(self, '_loaded_ledger_id', self.ledger_id)
+        )
+        if rate_is_stale:
+            self.fx_rate = rate_between(self.currency, self.ledger.currency)
+
+        self.amount_native = _to_money(self.amount * self.fx_rate)
+
+    def full_clean(self, *args, **kwargs):
+        # clean_fields() runs before clean() and would reject the not-null
+        # amount_native/fx_rate before any hook could populate them.
+        self._derive_native_amounts()
+        super().full_clean(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self._derive_native_amounts()
+        super().save(*args, **kwargs)
+        self._loaded_currency_id = self.currency_id
+        self._loaded_ledger_id = self.ledger_id
 
     def clean(self):
         super().clean()
@@ -183,6 +245,28 @@ class ExpensePart(NetBoxModel):
 
     def get_absolute_url(self) -> str:
         return reverse('plugins:netbox_ledger_tracker:expensepart', args=[self.pk])
+
+    def _derive_native_amounts(self):
+        """Restate this person's paid/owed amounts using the parent expense's frozen rate.
+
+        Always derived, never trusted from the caller, so a part cannot drift out
+        of step with the expense it belongs to.
+        """
+        if not self.expense_id:
+            return
+        rate = self.expense.fx_rate
+        if rate is None:
+            return
+        self.has_paid_native = _to_money(self.has_paid * rate)
+        self.should_pay_native = _to_money(self.should_pay * rate)
+
+    def full_clean(self, *args, **kwargs):
+        self._derive_native_amounts()
+        super().full_clean(*args, **kwargs)
+
+    def save(self, *args, **kwargs):
+        self._derive_native_amounts()
+        super().save(*args, **kwargs)
 
     def clean(self):
         super().clean()

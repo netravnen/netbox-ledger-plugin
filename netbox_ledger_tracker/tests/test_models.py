@@ -88,6 +88,104 @@ class ExpenseModelTest(TestCase):
         expense.clean()  # should not raise
 
 
+class ExpenseCurrencyConversionTest(TestCase):
+    """Conversion is derived by the model, so every write path gets it right."""
+
+    def setUp(self):
+        self.dkk = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.eur = Currency.objects.create(iso4217_code='EUR', base_rate=Decimal('7.46'))
+        self.ledger = Ledger.objects.create(name='Summer trip', currency=self.dkk)
+
+    def _expense(self, currency=None, amount='100.00'):
+        return Expense.objects.create(
+            name='Dinner',
+            ledger=self.ledger,
+            currency=currency or self.eur,
+            amount=Decimal(amount),
+            date='2026-01-01',
+        )
+
+    def test_save_converts_into_the_ledger_currency(self):
+        expense = self._expense()
+        self.assertEqual(expense.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(expense.amount_native, Decimal('746.00'))
+
+    def test_same_currency_uses_a_rate_of_one(self):
+        expense = self._expense(currency=self.dkk)
+        self.assertEqual(expense.fx_rate, Decimal('1.0000000000'))
+        self.assertEqual(expense.amount_native, Decimal('100.00'))
+
+    def test_editing_the_amount_keeps_the_frozen_rate(self):
+        expense = self._expense()
+        expense.amount = Decimal('200.00')
+        expense.save()
+        expense.refresh_from_db()
+        self.assertEqual(expense.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(expense.amount_native, Decimal('1492.00'))
+
+    def test_later_rate_changes_do_not_reprice_a_saved_expense(self):
+        expense = self._expense()
+        self.eur.base_rate = Decimal('9.00')
+        self.eur.save()
+
+        expense.refresh_from_db()
+        expense.save()
+        expense.refresh_from_db()
+
+        self.assertEqual(expense.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(expense.amount_native, Decimal('746.00'))
+
+    def test_changing_the_currency_rederives_the_rate(self):
+        expense = self._expense()
+        expense.currency = self.dkk
+        expense.save()
+        expense.refresh_from_db()
+        self.assertEqual(expense.fx_rate, Decimal('1.0000000000'))
+        self.assertEqual(expense.amount_native, Decimal('100.00'))
+
+    def test_full_clean_populates_derived_fields(self):
+        # clean_fields() runs before clean(), so the not-null derived columns have
+        # to be filled in before validation rather than during it.
+        expense = Expense(
+            name='Dinner',
+            ledger=self.ledger,
+            currency=self.eur,
+            amount=Decimal('100.00'),
+            date='2026-01-01',
+        )
+        expense.full_clean()  # should not raise
+        self.assertEqual(expense.amount_native, Decimal('746.00'))
+
+    def test_parts_derive_natives_from_the_expense_rate(self):
+        expense = self._expense()
+        person = Person.objects.create(name='Alice', ledger=self.ledger)
+
+        part = ExpensePart(expense=expense, person=person, has_paid=Decimal('100.00'), should_pay=Decimal('40.00'))
+        part.save()
+        part.refresh_from_db()
+
+        self.assertEqual(part.has_paid_native, Decimal('746.00'))
+        self.assertEqual(part.should_pay_native, Decimal('298.40'))
+
+    def test_parts_ignore_caller_supplied_natives(self):
+        expense = self._expense()
+        person = Person.objects.create(name='Alice', ledger=self.ledger)
+
+        part = ExpensePart(
+            expense=expense,
+            person=person,
+            has_paid=Decimal('100.00'),
+            has_paid_native=Decimal('1.00'),  # wrong on purpose
+            should_pay=Decimal('100.00'),
+            should_pay_native=Decimal('1.00'),
+        )
+        part.save()
+        part.refresh_from_db()
+
+        self.assertEqual(part.has_paid_native, Decimal('746.00'))
+        self.assertEqual(part.should_pay_native, Decimal('746.00'))
+
+
 class ExpensePartModelTest(TestCase):
     def setUp(self):
         self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))

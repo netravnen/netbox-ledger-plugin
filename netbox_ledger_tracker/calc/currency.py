@@ -1,12 +1,24 @@
 from decimal import Decimal, localcontext
 
+# Precision of a stored exchange rate, matching Expense.fx_rate's decimal_places.
+FX_RATE_QUANT = Decimal('0.0000000001')
+
+
+def rate_between(from_currency, to_currency):
+    """Return how many ``to_currency`` units one ``from_currency`` unit buys.
+
+    Quantized to ``FX_RATE_QUANT`` so the value a caller stores is exactly the
+    one it converts with -- otherwise a rate rounded on its way into the
+    database would no longer reproduce the converted amount saved alongside it.
+    """
+    if from_currency.pk == to_currency.pk:
+        return Decimal(1).quantize(FX_RATE_QUANT)
+    return (Decimal(from_currency.base_rate) / Decimal(to_currency.base_rate)).quantize(FX_RATE_QUANT)
+
 
 def convert_currency(amount, from_currency, to_currency):
     """Convert ``amount`` between two Currency instances via their shared base_rate."""
-    if from_currency.pk == to_currency.pk:
-        return Decimal(amount)
-    base_amount = Decimal(amount) * from_currency.base_rate
-    return base_amount / to_currency.base_rate
+    return Decimal(amount) * rate_between(from_currency, to_currency)
 
 
 def fraction_to_decimal(value, precision=2):
