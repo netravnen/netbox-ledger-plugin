@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **Settlements.** A new `Settlement` model records a payment actually made
+  between two people, so a debt that has been paid stops being reported.
+  Previously the Settle Up matrix kept showing the original debt no matter
+  what had changed hands, and the only workaround was inventing a
+  compensating expense that never happened. Settlements carry their own
+  currency, because people settle in whatever they have to hand. Full CRUD,
+  REST and GraphQL surfaces, and both settlement algorithms deduct them.
+- **Per-person balances** (paid / share / settled / net) on the ledger page
+  and above the Settle Up matrix, derived from the same figures as the
+  matrix so the two cannot disagree.
+- **A third `calc_method`, `minimal`**, which genuinely minimises the number
+  of transfers by settling subgroups that already net to zero in isolation.
+  The search is exponential, so it is capped by the new `minimal_max_people`
+  setting (default 12) and falls back to `optimized` above that, saying so
+  on the page. Measured over 400 random balance sets of 4-8 people, it used
+  strictly fewer transfers than `optimized` in 15% of cases and never more.
+- `Expense.fx_rate`, recording the exchange rate an expense was priced at.
+
+### Fixed
+
+- **Currency conversion now happens on every write path.** It previously
+  lived in the Split Expense view alone, so the standard Add Expense form,
+  Clone, and the REST API all raised `IntegrityError` (a hard HTTP 500) by
+  failing to set the not-null `amount_native`, while bulk import stored the
+  raw amount unconverted and silently corrupted the settlement maths for
+  cross-currency expenses. Conversion is now derived by the model.
+- **Exchange rates are frozen per expense.** `amount_native` used to be
+  recomputed from whatever `Currency.base_rate` happened to hold, so running
+  `get_ledger_currency_rates` re-priced historical expenses and changed
+  figures people had already settled on.
+- `amount_native`, `fx_rate`, `has_paid_native` and `should_pay_native` are
+  read-only over the REST API; they are derived, and honouring a supplied
+  value let the API contradict the maths.
+- The `optimized` method was documented as minimising the number of
+  payments. It does not: with uniform edge weights the objective is the
+  total amount moved, and the transfer count is merely bounded at `n - 1`.
+  The documentation now says what it actually does, and `minimal` provides
+  the behaviour that was described.
+
+### Upgrade notes
+
+- Migration `0003` backfills `fx_rate` from `amount_native / amount` rather
+  than from current rates, so **no existing figure changes**. Expenses
+  written by the old bulk import path therefore backfill to a rate of `1`
+  and remain visibly wrong rather than being silently re-priced. Run
+  `manage.py ledger_recompute_fx <ledger>` to review and correct them; it is
+  a dry run unless given `--apply`.
+
 ## 0.1.0 - 2026-07-12
 
 ### Added
