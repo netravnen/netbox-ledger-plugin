@@ -300,6 +300,45 @@ class LedgerSettleUpViewTest(TestCase):
         self.assertEqual(self._balance_for(response, self.alice)['net'], Decimal('30.00'))
 
 
+class SettleUpExportTest(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_user(username='export-admin', password='pass', is_superuser=True)
+        self.client.force_login(self.superuser)
+        self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
+        self.alice = Person.objects.create(name='Alice', ledger=self.ledger)
+        self.bob = Person.objects.create(name='Bob', ledger=self.ledger)
+        expense = Expense.objects.create(
+            name='Dinner',
+            ledger=self.ledger,
+            currency=self.currency,
+            amount=Decimal('100'),
+            date='2026-01-01',
+        )
+        ExpensePart.objects.create(
+            expense=expense, person=self.alice, has_paid=Decimal('100'), should_pay=Decimal('50')
+        )
+        ExpensePart.objects.create(expense=expense, person=self.bob, has_paid=Decimal('0'), should_pay=Decimal('50'))
+
+    def test_export_returns_one_row_per_payment(self):
+        response = self.client.get(_url('ledger_settle_up', pk=self.ledger.pk), {'export': ''})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('attachment', response['Content-Disposition'])
+        self.assertIn('settle-up-summer-trip.csv', response['Content-Disposition'])
+
+        rows = response.content.decode().strip().splitlines()
+        self.assertEqual(rows[0], 'from,to,amount,currency')
+        self.assertEqual(rows[1], 'Bob,Alice,50.00,DKK')
+        self.assertEqual(len(rows), 2)
+
+    def test_page_still_renders_without_the_export_flag(self):
+        response = self.client.get(_url('ledger_settle_up', pk=self.ledger.pk))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.get('Content-Type'), 'text/csv; charset=utf-8')
+
+
 class LedgerDetailBalancesTest(TestCase):
     def setUp(self):
         self.superuser = User.objects.create_user(username='bal-admin', password='pass', is_superuser=True)

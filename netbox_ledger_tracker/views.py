@@ -1,10 +1,14 @@
+import csv
 from collections import OrderedDict
 from decimal import ROUND_DOWN, Decimal
 
 import networkx as nx
 from django.contrib import messages
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import content_disposition_header
+from django.utils.text import slugify
 from django.views.generic import View
 from netbox.object_actions import CloneObject, DeleteObject, EditObject
 from netbox.plugins import get_plugin_config
@@ -271,6 +275,9 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
             else:
                 matrix = result_to_matrix(result_to_decimal(fraction_result), people_by_id)
 
+        if 'export' in request.GET and matrix is not None:
+            return self._export_csv(ledger, people_by_id, result_to_decimal(fraction_result))
+
         return render(
             request,
             'netbox_ledger_tracker/ledger_settle_up.html',
@@ -287,6 +294,29 @@ class LedgerSettleUpView(ContentTypePermissionRequiredMixin, View):
                 'minimal_max_people': max_exact_people,
             },
         )
+
+    @staticmethod
+    def _export_csv(ledger, people_by_id, result):
+        """Emit the settlement as one row per payment.
+
+        The on-screen matrix is a grid because it has to show everyone against
+        everyone; what a participant actually wants to keep is the short list of
+        payments they owe, which is what this produces.
+        """
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        filename = f'settle-up-{slugify(ledger.name) or ledger.pk}.csv'
+        response['Content-Disposition'] = content_disposition_header(as_attachment=True, filename=filename)
+
+        writer = csv.writer(response)
+        writer.writerow(['from', 'to', 'amount', 'currency'])
+        for payer_id, receivers in result.items():
+            for receiver_id, amount in receivers.items():
+                if amount and payer_id in people_by_id and receiver_id in people_by_id:
+                    writer.writerow(
+                        [people_by_id[payer_id], people_by_id[receiver_id], amount, ledger.currency.iso4217_code]
+                    )
+
+        return response
 
 
 ###
