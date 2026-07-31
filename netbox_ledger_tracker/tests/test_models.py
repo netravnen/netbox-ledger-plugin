@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from netbox_ledger_tracker.choices import LedgerCalcMethodChoices
-from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person
+from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
 
 User = get_user_model()
 
@@ -216,3 +216,68 @@ class ExpensePartModelTest(TestCase):
         with self.assertRaises(ValidationError):
             duplicate = ExpensePart(expense=self.expense, person=self.person, should_pay=Decimal('50'))
             duplicate.full_clean()
+
+
+class SettlementModelTest(TestCase):
+    def setUp(self):
+        self.dkk = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
+        self.eur = Currency.objects.create(iso4217_code='EUR', base_rate=Decimal('7.46'))
+        self.ledger = Ledger.objects.create(name='Summer trip', currency=self.dkk)
+        self.other_ledger = Ledger.objects.create(name='House tab', currency=self.dkk)
+        self.alice = Person.objects.create(name='Alice', ledger=self.ledger)
+        self.bob = Person.objects.create(name='Bob', ledger=self.ledger)
+        self.outsider = Person.objects.create(name='Carol', ledger=self.other_ledger)
+
+    def _settlement(self, **overrides):
+        kwargs = {
+            'ledger': self.ledger,
+            'from_person': self.bob,
+            'to_person': self.alice,
+            'currency': self.dkk,
+            'amount': Decimal('50.00'),
+            'date': '2026-01-01',
+        }
+        kwargs.update(overrides)
+        return Settlement(**kwargs)
+
+    def test_converts_into_the_ledger_currency(self):
+        settlement = self._settlement(currency=self.eur, amount=Decimal('10.00'))
+        settlement.save()
+        settlement.refresh_from_db()
+        self.assertEqual(settlement.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(settlement.amount_native, Decimal('74.60'))
+
+    def test_later_rate_changes_do_not_reprice_a_saved_settlement(self):
+        settlement = self._settlement(currency=self.eur, amount=Decimal('10.00'))
+        settlement.save()
+
+        self.eur.base_rate = Decimal('9.00')
+        self.eur.save()
+        settlement.refresh_from_db()
+        settlement.save()
+        settlement.refresh_from_db()
+
+        self.assertEqual(settlement.fx_rate, Decimal('7.4600000000'))
+        self.assertEqual(settlement.amount_native, Decimal('74.60'))
+
+    def test_clean_rejects_paying_yourself(self):
+        settlement = self._settlement(to_person=self.bob)
+        with self.assertRaises(ValidationError):
+            settlement.clean()
+
+    def test_clean_rejects_a_person_from_another_ledger(self):
+        settlement = self._settlement(from_person=self.outsider)
+        with self.assertRaises(ValidationError):
+            settlement.clean()
+
+    def test_clean_rejects_closed_ledger(self):
+        self.ledger.closed = True
+        self.ledger.save()
+        with self.assertRaises(ValidationError):
+            self._settlement().clean()
+
+    def test_clean_allows_a_valid_settlement(self):
+        self._settlement().clean()  # should not raise
+
+    def test_str_describes_the_transfer(self):
+        self.assertEqual(str(self._settlement()), 'Bob to Alice: 50.00 DKK')

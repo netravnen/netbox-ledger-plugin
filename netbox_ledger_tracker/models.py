@@ -9,7 +9,7 @@ from django.urls import reverse
 from netbox.models import NetBoxModel
 
 from .calc.currency import rate_between
-from .choices import LedgerCalcMethodChoices
+from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
 
 User = get_user_model()
 
@@ -282,3 +282,81 @@ class ExpensePart(NetBoxModel):
         super().clean()
         if self.expense_id and self.person_id and self.expense.ledger_id != self.person.ledger_id:
             raise ValidationError('The expense and person must belong to the same ledger.')
+
+
+class Settlement(FrozenRateMixin, NetBoxModel):
+    """A real payment made between two people to pay down what the ledger says they owe.
+
+    Expenses record what was *spent*; settlements record what has since been
+    *paid back*. Without them the Settle Up matrix would keep reporting a debt
+    that has already been cleared, and the only workaround would be inventing a
+    fake compensating expense.
+    """
+
+    clone_fields = ['ledger', 'currency', 'date', 'method']
+
+    ledger = models.ForeignKey(to=Ledger, on_delete=models.CASCADE, related_name='settlements')
+    from_person = models.ForeignKey(
+        to=Person,
+        on_delete=models.PROTECT,
+        related_name='settlements_paid',
+        verbose_name='From',
+        help_text='The person who handed over the money.',
+    )
+    to_person = models.ForeignKey(
+        to=Person,
+        on_delete=models.PROTECT,
+        related_name='settlements_received',
+        verbose_name='To',
+        help_text='The person who received it.',
+    )
+    currency = models.ForeignKey(to=Currency, on_delete=models.PROTECT, related_name='settlements')
+    amount = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    amount_native = models.DecimalField(
+        max_digits=20,
+        decimal_places=2,
+        editable=False,
+        help_text='Amount converted to the ledger currency at the time this settlement was saved.',
+    )
+    fx_rate = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        editable=False,
+        help_text=(
+            'Ledger-currency units per unit of the settlement currency. Frozen when the '
+            'settlement is first saved, so later exchange-rate updates do not silently '
+            're-price it.'
+        ),
+    )
+    date = models.DateField()
+    method = models.CharField(max_length=30, choices=SettlementMethodChoices, blank=True)
+    comments = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-date', '-pk']
+        verbose_name = 'Settlement'
+        verbose_name_plural = 'Settlements'
+
+    def __str__(self) -> str:
+        return f'{self.from_person} to {self.to_person}: {self.amount} {self.currency}'
+
+    def get_absolute_url(self) -> str:
+        return reverse('plugins:netbox_ledger_tracker:settlement', args=[self.pk])
+
+    def get_method_color(self):
+        return SettlementMethodChoices.colors.get(self.method)
+
+    def clean(self):
+        super().clean()
+        if self.from_person_id and self.from_person_id == self.to_person_id:
+            raise ValidationError('A settlement must be between two different people.')
+        if self.ledger_id:
+            if self.ledger.closed:
+                raise ValidationError('Cannot add or edit settlements on a closed ledger.')
+            for field, person in (('from_person', self.from_person), ('to_person', self.to_person)):
+                if person is not None and person.ledger_id != self.ledger_id:
+                    raise ValidationError({field: 'This person belongs to a different ledger.'})
