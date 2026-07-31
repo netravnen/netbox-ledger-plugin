@@ -313,3 +313,9 @@ class ClosedLedgerTest(TestCase):
 
     def test_adding_to_an_open_ledger_is_fine(self):
         Person(name='Alice', ledger=self.open_ledger).clean()  # should not raise
+
+
+class ExpenseAttachmentsTest(TestCase):
+    def test_expense_supports_image_attachments(self):
+        # The feature is what lets a receipt be filed against the expense.
+        self.assertTrue(hasattr(Expense, 'images'))

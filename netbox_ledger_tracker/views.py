@@ -356,7 +356,10 @@ class ExpenseView(ObjectView):
     template_name = 'netbox_ledger_tracker/expense.html'
     layout = SimpleLayout(
         left_panels=[ExpensePanel()],
-        right_panels=[TemplatePanel('inc/panels/tags.html')],
+        right_panels=[
+            TemplatePanel('inc/panels/tags.html'),
+            TemplatePanel('inc/panels/image_attachments.html'),
+        ],
         bottom_panels=[
             ObjectsTablePanel(
                 model='netbox_ledger_tracker.expensepart',

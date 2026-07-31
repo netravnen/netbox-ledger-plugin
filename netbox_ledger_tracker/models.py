@@ -7,6 +7,7 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.urls import reverse
 from netbox.models import NetBoxModel
+from netbox.models.features import ImageAttachmentsMixin
 
 from .calc.currency import rate_between
 from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
@@ -195,8 +196,12 @@ class Person(NetBoxModel):
             raise ValidationError({'ledger': 'Cannot move people into a closed ledger.'})
 
 
-class Expense(FrozenRateMixin, NetBoxModel):
-    """A single shared expense recorded against a Ledger."""
+class Expense(FrozenRateMixin, ImageAttachmentsMixin, NetBoxModel):
+    """A single shared expense recorded against a Ledger.
+
+    Carries image attachments so a receipt can be filed against the expense it
+    belongs to, which is the usual way a disputed share gets resolved.
+    """
 
     clone_fields = ['ledger', 'currency', 'date']
 
