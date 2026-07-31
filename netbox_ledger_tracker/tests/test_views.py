@@ -1,55 +1,49 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import TestCase
+from django.urls import reverse
 
 from netbox_ledger_tracker.models import Currency, Expense, ExpensePart, Ledger, Person
-from netbox_ledger_tracker.views import (
-    CurrencyListView,
-    ExpenseListView,
-    ExpenseSplitView,
-    LedgerListView,
-    LedgerSettleUpView,
-    PersonListView,
-)
 
 User = get_user_model()
+
+
+def _url(name, **kwargs):
+    return reverse(f'plugins:netbox_ledger_tracker:{name}', kwargs=kwargs or None)
 
 
 class ListViewSmokeTest(TestCase):
     """Every model's list view should render for a superuser without error."""
 
     def setUp(self):
-        self.factory = RequestFactory()
         self.superuser = User.objects.create_user(username='ledger-admin', password='pass', is_superuser=True)
+        # Drive these through the test client rather than RequestFactory: the list
+        # views call htmx_partial(), which reads request.htmx, and that attribute is
+        # only set by django-htmx's middleware.
+        self.client.force_login(self.superuser)
         self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
         self.ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
         Person.objects.create(name='Alice', ledger=self.ledger)
 
-    def _get(self, view_cls, path):
-        request = self.factory.get(path)
-        request.user = self.superuser
-        response = view_cls.as_view()(request)
-        response.render()
-        return response
-
     def test_currency_list(self):
-        self.assertEqual(self._get(CurrencyListView, '/plugins/ledger/currencies/').status_code, 200)
+        self.assertEqual(self.client.get(_url('currency_list')).status_code, 200)
 
     def test_ledger_list(self):
-        self.assertEqual(self._get(LedgerListView, '/plugins/ledger/ledgers/').status_code, 200)
+        self.assertEqual(self.client.get(_url('ledger_list')).status_code, 200)
 
     def test_person_list(self):
-        self.assertEqual(self._get(PersonListView, '/plugins/ledger/people/').status_code, 200)
+        self.assertEqual(self.client.get(_url('person_list')).status_code, 200)
 
     def test_expense_list(self):
-        self.assertEqual(self._get(ExpenseListView, '/plugins/ledger/expenses/').status_code, 200)
+        self.assertEqual(self.client.get(_url('expense_list')).status_code, 200)
 
 
 class ExpenseSplitViewTest(TestCase):
     def setUp(self):
-        self.factory = RequestFactory()
         self.superuser = User.objects.create_user(username='split-admin', password='pass', is_superuser=True)
+        # The success path calls messages.success(), which needs MessageMiddleware.
+        self.client.force_login(self.superuser)
         self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
         self.ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
         self.alice = Person.objects.create(name='Alice', ledger=self.ledger)
@@ -74,29 +68,20 @@ class ExpenseSplitViewTest(TestCase):
         return data
 
     def test_get_without_ledger_shows_picker(self):
-        request = self.factory.get('/plugins/ledger/expenses/split/add/')
-        request.user = self.superuser
-
-        response = ExpenseSplitView.as_view()(request)
+        response = self.client.get(_url('expense_split_add'))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'Pick which ledger', response.content)
 
     def test_get_with_ledger_shows_person_fields(self):
-        request = self.factory.get(f'/plugins/ledger/expenses/split/add/?ledger={self.ledger.pk}')
-        request.user = self.superuser
-
-        response = ExpenseSplitView.as_view()(request)
+        response = self.client.get(_url('expense_split_add'), {'ledger': self.ledger.pk})
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(self.alice.name.encode(), response.content)
         self.assertIn(self.bob.name.encode(), response.content)
 
     def test_post_creates_expense_with_even_auto_split(self):
-        request = self.factory.post('/plugins/ledger/expenses/split/add/', data=self._post_data())
-        request.user = self.superuser
-
-        response = ExpenseSplitView.as_view()(request)
+        response = self.client.post(_url('expense_split_add'), data=self._post_data())
 
         self.assertEqual(response.status_code, 302)
         expense = Expense.objects.get(name='Dinner')
@@ -111,9 +96,7 @@ class ExpenseSplitViewTest(TestCase):
         carol = Person.objects.create(name='Carol', ledger=self.ledger)
         data = self._post_data(**{f'person-involved-{carol.pk}': 'on', f'person-auto-{carol.pk}': 'on'})
 
-        request = self.factory.post('/plugins/ledger/expenses/split/add/', data=data)
-        request.user = self.superuser
-        response = ExpenseSplitView.as_view()(request)
+        response = self.client.post(_url('expense_split_add'), data=data)
 
         self.assertEqual(response.status_code, 302)
         expense = Expense.objects.get(name='Dinner')
@@ -122,16 +105,16 @@ class ExpenseSplitViewTest(TestCase):
         self.assertEqual(sum(shares), Decimal('100'))
 
     def test_post_rejects_shares_that_dont_add_up(self):
-        data = self._post_data(**{
-            f'person-auto-{self.alice.pk}': '',
-            f'person-shouldpay-{self.alice.pk}': '10',
-            f'person-auto-{self.bob.pk}': '',
-            f'person-shouldpay-{self.bob.pk}': '10',
-        })
-        request = self.factory.post('/plugins/ledger/expenses/split/add/', data=data)
-        request.user = self.superuser
+        data = self._post_data(
+            **{
+                f'person-auto-{self.alice.pk}': '',
+                f'person-shouldpay-{self.alice.pk}': '10',
+                f'person-auto-{self.bob.pk}': '',
+                f'person-shouldpay-{self.bob.pk}': '10',
+            }
+        )
 
-        response = ExpenseSplitView.as_view()(request)
+        response = self.client.post(_url('expense_split_add'), data=data)
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Expense.objects.filter(name='Dinner').exists())
@@ -149,12 +132,10 @@ class ExpenseSplitViewTest(TestCase):
             expense=expense, person=self.alice, has_paid=Decimal('100'), should_pay=Decimal('100')
         )
 
-        request = self.factory.post(
-            f'/plugins/ledger/expenses/{expense.pk}/split/',
+        response = self.client.post(
+            _url('expense_split_edit', pk=expense.pk),
             data=self._post_data(name='Dinner (renamed)'),
         )
-        request.user = self.superuser
-        response = ExpenseSplitView.as_view()(request, pk=expense.pk)
 
         self.assertEqual(response.status_code, 302)
         expense.refresh_from_db()
@@ -164,24 +145,17 @@ class ExpenseSplitViewTest(TestCase):
 
 class LedgerSettleUpViewTest(TestCase):
     def setUp(self):
-        self.factory = RequestFactory()
         self.superuser = User.objects.create_user(username='settle-admin', password='pass', is_superuser=True)
+        self.client.force_login(self.superuser)
         self.currency = Currency.objects.create(iso4217_code='DKK', base_rate=Decimal('1'))
         self.ledger = Ledger.objects.create(name='Summer trip', currency=self.currency)
         self.alice = Person.objects.create(name='Alice', ledger=self.ledger)
         self.bob = Person.objects.create(name='Bob', ledger=self.ledger)
 
     def _get(self):
-        request = self.factory.get(f'/plugins/ledger/ledgers/{self.ledger.pk}/settle-up/')
-        request.user = self.superuser
-        return LedgerSettleUpView.as_view()(request, pk=self.ledger.pk)
+        return self.client.get(_url('ledger_settle_up', pk=self.ledger.pk))
 
-    def test_no_expenses_shows_empty_state(self):
-        response = self._get()
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b'No expenses recorded', response.content)
-
-    def test_basic_method_computes_matrix(self):
+    def _dinner_split_evenly(self):
         expense = Expense.objects.create(
             name='Dinner',
             ledger=self.ledger,
@@ -191,13 +165,30 @@ class LedgerSettleUpViewTest(TestCase):
             date='2026-01-01',
         )
         ExpensePart.objects.create(
-            expense=expense, person=self.alice, has_paid=Decimal('100'), has_paid_native=Decimal('100'),
-            should_pay=Decimal('50'), should_pay_native=Decimal('50'),
+            expense=expense,
+            person=self.alice,
+            has_paid=Decimal('100'),
+            has_paid_native=Decimal('100'),
+            should_pay=Decimal('50'),
+            should_pay_native=Decimal('50'),
         )
         ExpensePart.objects.create(
-            expense=expense, person=self.bob, has_paid=Decimal('0'), has_paid_native=Decimal('0'),
-            should_pay=Decimal('50'), should_pay_native=Decimal('50'),
+            expense=expense,
+            person=self.bob,
+            has_paid=Decimal('0'),
+            has_paid_native=Decimal('0'),
+            should_pay=Decimal('50'),
+            should_pay_native=Decimal('50'),
         )
+        return expense
+
+    def test_no_expenses_shows_empty_state(self):
+        response = self._get()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'No expenses recorded', response.content)
+
+    def test_basic_method_computes_matrix(self):
+        self._dinner_split_evenly()
 
         response = self._get()
 
@@ -208,22 +199,7 @@ class LedgerSettleUpViewTest(TestCase):
     def test_optimized_method_computes_matrix(self):
         self.ledger.calc_method = 'optimized'
         self.ledger.save()
-        expense = Expense.objects.create(
-            name='Dinner',
-            ledger=self.ledger,
-            currency=self.currency,
-            amount=Decimal('100'),
-            amount_native=Decimal('100'),
-            date='2026-01-01',
-        )
-        ExpensePart.objects.create(
-            expense=expense, person=self.alice, has_paid=Decimal('100'), has_paid_native=Decimal('100'),
-            should_pay=Decimal('50'), should_pay_native=Decimal('50'),
-        )
-        ExpensePart.objects.create(
-            expense=expense, person=self.bob, has_paid=Decimal('0'), has_paid_native=Decimal('0'),
-            should_pay=Decimal('50'), should_pay_native=Decimal('50'),
-        )
+        self._dinner_split_evenly()
 
         response = self._get()
 
