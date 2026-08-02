@@ -22,7 +22,8 @@ All notable changes to this project will be documented in this file.
   setting (default 12) and falls back to `optimized` above that, saying so
   on the page. Measured over 400 random balance sets of 4-8 people, it used
   strictly fewer transfers than `optimized` in 15% of cases and never more.
-- `Expense.fx_rate`, recording the exchange rate an expense was priced at.
+- `Expense.fx_rate`, recording the exchange rate an expense was priced at, so
+  later rate updates cannot re-price it.
 
 ### Fixed
 
@@ -47,12 +48,9 @@ All notable changes to this project will be documented in this file.
 
 ### Upgrade notes
 
-- Migration `0003` backfills `fx_rate` from `amount_native / amount` rather
-  than from current rates, so **no existing figure changes**. Expenses
-  written by the old bulk import path therefore backfill to a rate of `1`
-  and remain visibly wrong rather than being silently re-priced. Run
-  `manage.py ledger_recompute_fx <ledger>` to review and correct them; it is
-  a dry run unless given `--apply`.
+- Migration `0003` backfills `fx_rate` from the currencies each expense
+  references and restates `amount_native` and the per-part amounts to match,
+  repairing rows the old bulk import path stored unconverted.
 
 ## 0.1.0 - 2026-07-12
 
