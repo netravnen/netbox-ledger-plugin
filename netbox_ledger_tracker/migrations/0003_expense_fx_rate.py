@@ -1,28 +1,42 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import migrations, models
 
 FX_RATE_QUANT = Decimal('0.0000000001')
+MONEY_QUANT = Decimal('0.01')
 
 
 def backfill_fx_rate(apps, schema_editor):
-    """Derive each expense's frozen rate from the amounts already stored.
+    """Give every existing expense the rate its currencies actually imply.
 
-    Deliberately reconstructed from `amount_native / amount` rather than from the
-    current `Currency.base_rate`. Rates move, so re-deriving from today's values
-    would silently re-price historical expenses; and rows written by the old bulk
-    import path stored an unconverted `amount_native`, which yields a rate of 1
-    here. That preserves exactly what the ledger already reported instead of
-    quietly changing settled figures. Operators who want those rows corrected can
-    run the `ledger_recompute_fx` management command, which is opt-in per ledger.
+    Derived from Currency.base_rate rather than reconstructed from the stored
+    amount_native. Reconstructing would faithfully reproduce the old bulk-import
+    bug -- those rows hold an unconverted amount_native, which implies a rate of
+    1 -- and there are no production deployments whose figures need preserving,
+    so the correct value is simply better than the historical one.
+
+    amount_native and the per-part amounts are restated to match, since leaving
+    them would put the expense and its rate in disagreement.
     """
     Expense = apps.get_model('netbox_ledger_tracker', 'Expense')
-    for expense in Expense.objects.all().iterator():
-        if expense.amount and expense.amount != 0:
-            rate = (Decimal(expense.amount_native) / Decimal(expense.amount)).quantize(FX_RATE_QUANT)
+    ExpensePart = apps.get_model('netbox_ledger_tracker', 'ExpensePart')
+
+    for expense in Expense.objects.select_related('currency', 'ledger__currency').iterator():
+        if expense.currency_id == expense.ledger.currency_id:
+            rate = Decimal(1)
         else:
-            rate = Decimal(1).quantize(FX_RATE_QUANT)
-        Expense.objects.filter(pk=expense.pk).update(fx_rate=rate)
+            rate = Decimal(expense.currency.base_rate) / Decimal(expense.ledger.currency.base_rate)
+        rate = rate.quantize(FX_RATE_QUANT)
+
+        Expense.objects.filter(pk=expense.pk).update(
+            fx_rate=rate,
+            amount_native=(Decimal(expense.amount) * rate).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP),
+        )
+        for part in ExpensePart.objects.filter(expense_id=expense.pk):
+            ExpensePart.objects.filter(pk=part.pk).update(
+                has_paid_native=(Decimal(part.has_paid) * rate).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP),
+                should_pay_native=(Decimal(part.should_pay) * rate).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP),
+            )
 
 
 def noop(apps, schema_editor):
