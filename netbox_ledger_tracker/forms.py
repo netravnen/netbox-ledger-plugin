@@ -10,6 +10,7 @@ from netbox.forms import (
 from utilities.forms import add_blank_choice
 from utilities.forms.constants import BOOLEAN_WITH_BLANK
 from utilities.forms.fields import (
+    CommentField,
     CSVModelChoiceField,
     DynamicModelChoiceField,
     TagFilterField,
@@ -22,6 +23,8 @@ from utilities.forms.fields import (
 
 
 class CurrencyForm(NetBoxModelForm):
+    comments = CommentField()
+
     class Meta:
         model = Currency
         fields = ['iso4217_code', 'base_rate', 'comments', 'tags']
