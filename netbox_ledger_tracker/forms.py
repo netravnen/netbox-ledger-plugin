@@ -7,18 +7,13 @@ from netbox.forms import (
     NetBoxModelForm,
     NetBoxModelImportForm,
 )
+from utilities.forms import add_blank_choice
+from utilities.forms.constants import BOOLEAN_WITH_BLANK
 from utilities.forms.fields import (
     CSVModelChoiceField,
     DynamicModelChoiceField,
     TagFilterField,
 )
-
-from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
-from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
-
-User = get_user_model()
-
-_NULL_BOOLEAN_CHOICES = ((None, '---------'), (True, 'Yes'), (False, 'No'))
 
 
 ###
@@ -79,8 +74,8 @@ class LedgerImportForm(NetBoxModelImportForm):
 class LedgerBulkEditForm(NetBoxModelBulkEditForm):
     model = Ledger
     currency = DynamicModelChoiceField(queryset=Currency.objects.all(), required=False)
-    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=_NULL_BOOLEAN_CHOICES))
-    calc_method = forms.ChoiceField(choices=[('', '---------'), *LedgerCalcMethodChoices], required=False)
+    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
+    calc_method = forms.ChoiceField(choices=add_blank_choice(LedgerCalcMethodChoices), required=False)
     comments = forms.CharField(required=False, widget=forms.Textarea)
     nullable_fields = ['comments']
 
@@ -88,8 +83,8 @@ class LedgerBulkEditForm(NetBoxModelBulkEditForm):
 class LedgerFilterForm(NetBoxModelFilterSetForm):
     model = Ledger
     currency_id = DynamicModelChoiceField(queryset=Currency.objects.all(), required=False, label='Currency')
-    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=_NULL_BOOLEAN_CHOICES))
-    calc_method = forms.ChoiceField(choices=[('', '---------'), *LedgerCalcMethodChoices], required=False)
+    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
+    calc_method = forms.ChoiceField(choices=add_blank_choice(LedgerCalcMethodChoices), required=False)
     tag = TagFilterField(model)
 
 
@@ -194,7 +189,7 @@ class ExpensePartBulkEditForm(NetBoxModelBulkEditForm):
     model = ExpensePart
     has_paid = forms.DecimalField(required=False, max_digits=20, decimal_places=2)
     should_pay = forms.DecimalField(required=False, max_digits=20, decimal_places=2)
-    auto_amount = forms.NullBooleanField(required=False, widget=forms.Select(choices=_NULL_BOOLEAN_CHOICES))
+    auto_amount = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
 
 
 class ExpensePartFilterForm(NetBoxModelFilterSetForm):

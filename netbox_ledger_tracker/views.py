@@ -23,6 +23,7 @@ from netbox.views.generic import (
     ObjectListView,
     ObjectView,
 )
+from utilities.permissions import get_permission_for_model
 from utilities.views import ContentTypePermissionRequiredMixin, GetReturnURLMixin, register_model_view
 
 from .calc.basic import basic_calc
@@ -177,8 +178,8 @@ class LedgerView(ObjectView):
 
     def get_extra_context(self, request, instance):
         return {
-            'can_add_expense': request.user.has_perm('netbox_ledger_tracker.add_expense'),
-            'can_add_settlement': request.user.has_perm('netbox_ledger_tracker.add_settlement'),
+            'can_add_expense': request.user.has_perm(get_permission_for_model(Expense, 'add')),
+            'can_add_settlement': request.user.has_perm(get_permission_for_model(Settlement, 'add')),
             'balances': ledger_person_balances(instance),
         }
 

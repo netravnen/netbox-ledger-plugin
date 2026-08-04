@@ -1,4 +1,4 @@
-from utilities.choices import ChoiceSet
+from utilities.choices import ChoiceSet, ColorChoices
 
 
 class LedgerCalcMethodChoices(ChoiceSet):
@@ -9,9 +9,9 @@ class LedgerCalcMethodChoices(ChoiceSet):
     MINIMAL = 'minimal'
 
     CHOICES = [
-        (BASIC, 'Basic (pairwise netting)', 'blue'),
-        (OPTIMIZED, 'Optimized (minimum-cost settlement)', 'green'),
-        (MINIMAL, 'Minimal (fewest payments)', 'purple'),
+        (BASIC, 'Basic (pairwise netting)', ColorChoices.COLOR_BLUE),
+        (OPTIMIZED, 'Optimized (minimum-cost settlement)', ColorChoices.COLOR_GREEN),
+        (MINIMAL, 'Minimal (fewest payments)', ColorChoices.COLOR_PURPLE),
     ]
 
 
@@ -27,8 +27,8 @@ class SettlementMethodChoices(ChoiceSet):
     OTHER = 'other'
 
     CHOICES = [
-        (CASH, 'Cash', 'green'),
-        (BANK_TRANSFER, 'Bank transfer', 'blue'),
-        (MOBILE_PAYMENT, 'Mobile payment', 'purple'),
-        (OTHER, 'Other', 'gray'),
+        (CASH, 'Cash', ColorChoices.COLOR_GREEN),
+        (BANK_TRANSFER, 'Bank transfer', ColorChoices.COLOR_BLUE),
+        (MOBILE_PAYMENT, 'Mobile payment', ColorChoices.COLOR_PURPLE),
+        (OTHER, 'Other', ColorChoices.COLOR_GRAY),
     ]
