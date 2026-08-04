@@ -13,7 +13,7 @@ from django.views.generic import View
 from netbox.object_actions import CloneObject, DeleteObject, EditObject
 from netbox.plugins import get_plugin_config
 from netbox.ui.layout import SimpleLayout
-from netbox.ui.panels import ObjectsTablePanel, TemplatePanel
+from netbox.ui.panels import JournalEntriesPanel, ObjectsTablePanel, TemplatePanel
 from netbox.views.generic import (
     BulkDeleteView,
     BulkEditView,
