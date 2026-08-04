@@ -7,7 +7,7 @@ from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.urls import reverse
 from netbox.models import NetBoxModel
-from netbox.models.features import ImageAttachmentsMixin
+from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
 
 from .calc.currency import rate_between
 from .choices import LedgerCalcMethodChoices, SettlementMethodChoices
@@ -152,7 +152,7 @@ class Ledger(NetBoxModel):
         return reverse('plugins:netbox_ledger_tracker:ledger', args=[self.pk])
 
 
-class Person(NetBoxModel):
+class Person(ContactsMixin, NetBoxModel):
     """A participant in a Ledger. Optionally linked to a NetBox user account."""
 
     clone_fields = ['ledger']
