@@ -1,37 +1,39 @@
-from netbox.search import SearchIndex, register_search
-
-from .models import Currency, Expense, Ledger, Person, Settlement
-
-
-@register_search
-class CurrencyIndex(SearchIndex):
-    model = Currency
-    fields = (('iso4217_code', 100), ('comments', 5000))
+from netbox.search import SearchIndex, register
+from . import models
 
 
-@register_search
+@register
 class LedgerIndex(SearchIndex):
-    model = Ledger
-    fields = (('name', 100), ('comments', 5000))
-    display_attrs = ('currency', 'closed', 'calc_method')
+    model = models.Ledger
+    fields = (
+        ('name', 100),
+        ('description', 500),
+        ('comments', 500),
+    )
 
 
-@register_search
+@register
 class PersonIndex(SearchIndex):
-    model = Person
-    fields = (('name', 100),)
-    display_attrs = ('ledger', 'user')
+    model = models.Person
+    fields = (
+        ('name', 100),
+    )
 
 
-@register_search
+@register
 class ExpenseIndex(SearchIndex):
-    model = Expense
-    fields = (('name', 100), ('comments', 5000))
-    display_attrs = ('ledger', 'amount', 'date')
+    model = models.Expense
+    fields = (
+        ('title', 100),
+        ('vendor', 100),
+        ('comments', 500),
+    )
 
 
-@register_search
+@register
 class SettlementIndex(SearchIndex):
-    model = Settlement
-    fields = (('comments', 5000),)
-    display_attrs = ('ledger', 'from_person', 'to_person', 'amount', 'date')
+    model = models.Settlement
+    fields = (
+        ('title', 100),
+        ('comments', 500),
+    )
