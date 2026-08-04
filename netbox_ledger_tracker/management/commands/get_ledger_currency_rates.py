@@ -13,6 +13,7 @@ from urllib.request import urlopen
 
 from django.core.management.base import BaseCommand
 from netbox.plugins import get_plugin_config
+from utilities.context_managers import change_logging
 
 from ...models import Currency, validate_iso4217_code
 
@@ -63,9 +64,10 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Done updating currency rates.'))
 
     def _save_rate(self, code, rate):
-        currency, created = Currency.objects.update_or_create(
-            iso4217_code=code,
-            defaults={'base_rate': rate},
-        )
+        with change_logging():
+            currency, created = Currency.objects.update_or_create(
+                iso4217_code=code,
+                defaults={'base_rate': rate},
+            )
         verb = 'Created' if created else 'Updated'
         self.stdout.write(f'{verb} {currency.iso4217_code}: 1 {currency.iso4217_code} = {rate} base units')
