@@ -30,7 +30,7 @@ class ExpenseIndex(SearchIndex):
     )
 
 
-@register
+@register_search
 class SettlementIndex(SearchIndex):
     model = models.Settlement
     fields = (
