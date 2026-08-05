@@ -31,5 +31,5 @@ class SettlementMethodChoices(ChoiceSet):
         (CASH, 'Cash', ColorChoices.COLOR_GREEN),
         (BANK_TRANSFER, 'Bank transfer', ColorChoices.COLOR_BLUE),
         (MOBILE_PAYMENT, 'Mobile payment', ColorChoices.COLOR_PURPLE),
-        (OTHER, 'Other', ColorChoices.COLOR_GRAY),
+        (OTHER, 'Other', ColorChoices.COLOR_GREY),
     ]
