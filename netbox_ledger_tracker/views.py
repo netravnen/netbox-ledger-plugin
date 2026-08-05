@@ -23,6 +23,7 @@ from netbox.views.generic import (
     ObjectListView,
     ObjectView,
 )
+from utilities.export import CSVDataExport
 from utilities.permissions import get_permission_for_model
 from utilities.views import ContentTypePermissionRequiredMixin, GetReturnURLMixin, register_model_view
 
