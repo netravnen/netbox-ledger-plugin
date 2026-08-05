@@ -28,4 +28,4 @@ class LedgerTrackerQuery:
     settlement_list: list[SettlementType] = strawberry_django.field()
 
 
-schema = strawberry.Schema(query=LedgerTrackerQuery)
+schema = (LedgerTrackerQuery,)
