@@ -1,4 +1,5 @@
-from utilities.choices import ChoiceSet, ColorChoices
+from netbox.choices import ColorChoices
+from utilities.choices import ChoiceSet
 
 
 class LedgerCalcMethodChoices(ChoiceSet):
