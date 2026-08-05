@@ -16,6 +16,8 @@ from utilities.forms.fields import (
     TagFilterField,
 )
 
+from .models import Currency, Expense, ExpensePart, Ledger, Person, Settlement
+
 
 ###
 # Currency
