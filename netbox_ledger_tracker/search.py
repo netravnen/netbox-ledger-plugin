@@ -1,8 +1,8 @@
-from netbox.search import SearchIndex, register
+from netbox.search import SearchIndex, register_search
 from . import models
 
 
-@register
+@register_search
 class LedgerIndex(SearchIndex):
     model = models.Ledger
     fields = (
@@ -12,7 +12,7 @@ class LedgerIndex(SearchIndex):
     )
 
 
-@register
+@register_search
 class PersonIndex(SearchIndex):
     model = models.Person
     fields = (
@@ -20,7 +20,7 @@ class PersonIndex(SearchIndex):
     )
 
 
-@register
+@register_search
 class ExpenseIndex(SearchIndex):
     model = models.Expense
     fields = (
