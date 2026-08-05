@@ -8,7 +8,7 @@ from netbox.forms import (
     NetBoxModelImportForm,
 )
 from utilities.forms import add_blank_choice
-from utilities.forms.constants import BOOLEAN_WITH_BLANK
+from utilities.forms.constants import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import (
     CommentField,
     CSVModelChoiceField,
@@ -77,7 +77,7 @@ class LedgerImportForm(NetBoxModelImportForm):
 class LedgerBulkEditForm(NetBoxModelBulkEditForm):
     model = Ledger
     currency = DynamicModelChoiceField(queryset=Currency.objects.all(), required=False)
-    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
+    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
     calc_method = forms.ChoiceField(choices=add_blank_choice(LedgerCalcMethodChoices), required=False)
     comments = forms.CharField(required=False, widget=forms.Textarea)
     nullable_fields = ['comments']
@@ -86,7 +86,7 @@ class LedgerBulkEditForm(NetBoxModelBulkEditForm):
 class LedgerFilterForm(NetBoxModelFilterSetForm):
     model = Ledger
     currency_id = DynamicModelChoiceField(queryset=Currency.objects.all(), required=False, label='Currency')
-    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
+    closed = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
     calc_method = forms.ChoiceField(choices=add_blank_choice(LedgerCalcMethodChoices), required=False)
     tag = TagFilterField(model)
 
@@ -192,7 +192,7 @@ class ExpensePartBulkEditForm(NetBoxModelBulkEditForm):
     model = ExpensePart
     has_paid = forms.DecimalField(required=False, max_digits=20, decimal_places=2)
     should_pay = forms.DecimalField(required=False, max_digits=20, decimal_places=2)
-    auto_amount = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK))
+    auto_amount = forms.NullBooleanField(required=False, widget=forms.Select(choices=BOOLEAN_WITH_BLANK_CHOICES))
 
 
 class ExpensePartFilterForm(NetBoxModelFilterSetForm):
