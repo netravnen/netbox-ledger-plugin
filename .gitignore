@@ -68,3 +68,5 @@ settings.local.json
 !CLAUDE.md
 !GEMINI.md
 !README.md
+
+docs/codebase/.codebase-scan.txt
