@@ -1,0 +1,17 @@
+<div id="netbox-ledger-tracker-version-badge"
+     style="position:fixed;bottom:16px;right:16px;z-index:9999;
+            background:rgba(30,30,30,.75);color:#e0e0e0;
+            padding:3px 9px;border-radius:4px;font-size:11px;
+            font-family:monospace;pointer-events:none;
+            backdrop-filter:blur(4px);">
+  ledger-tracker&nbsp;v{{ plugin_version }}
+</div>
+<script>
+  (function () {
+    // Deduplicate: only render one badge even if multiple extensions fire.
+    var existing = document.querySelectorAll('#netbox-ledger-tracker-version-badge');
+    if (existing.length > 1) {
+      for (var i = 1; i < existing.length; i++) existing[i].remove();
+    }
+  })();
+</script>
